@@ -47,11 +47,12 @@ canvas{position:fixed;inset:0;width:100%;height:100%}
 <button id="next">次へ</button>
 <div id="title"><div>
   <h1><small>SABAKI</small>一尾入魂</h1>
-  <p>指で鱗を取り、頭を落とし、三枚におろして刺身を引く。<br>今日の魚を選んで。</p>
+  <p id="lead">指で鱗を取り、頭を落とし、三枚におろして刺身を引く。<br>今日の魚を選んで。</p>
   <div id="pick"></div>
+  <p id="lang" style="margin-top:14px;font-size:13px"></p>
 </div></div>
 <div id="result"><div id="card">
-  <h2>親 方 の 鑑 定</h2>
+  <h2 id="verdict">親 方 の 鑑 定</h2>
   <div id="rank"></div>
   <table id="tbl"></table>
   <button id="xpost" style="background:#000;box-shadow:0 4px 0 #444">𝕏 で共有</button><br><button id="share">結果を保存</button><button id="again">もう一尾</button>
@@ -81,8 +82,16 @@ const FISHES = [
   { id: 'buri', ja: '鰤', en: 'Yellowtail', skin: '#6f8fa0', lv: 3 },
   { id: 'katsuo', ja: '鰹', en: 'Skipjack', skin: '#2f3f86', lv: 3 },
 ];
-const QS = new URLSearchParams(location.search), FISH = FISHES.find((f) => f.id === QS.get('fish')) || FISHES[3], FID = FISH.id, SKIN = FISH.skin;
-{ const t = document.getElementById('pick'); t.innerHTML = FISHES.map((f) => `<a href="?fish=${f.id}&go=1" class="${f.id === FID ? 'on' : ''}"><img src="assets/${f.id}.png" alt=""><b>${f.ja}</b><small>${'★'.repeat(f.lv)}</small></a>`).join(''); }
+const QS = new URLSearchParams(location.search), LANG = QS.get('lang') || (/^ja/i.test(navigator.language) ? 'ja' : 'en'), EN = {"一、鱗を取る": "1. SCALE IT", "尾から頭へ、指でこそげる": "Scrape from tail to head with your finger", "二、頭を落とす": "2. OFF WITH THE HEAD", "えらの後ろに、指で一本線を引く": "Draw one line just behind the gills", "三、三枚におろす": "3. FILLET", "裏も同じく。中骨に沿って": "Now the other side, along the backbone", "切り口の中骨の上に包丁を入れ、尾まで引く": "Set the knife on the backbone at the cut and draw it to the tail", "四、刺身を引く": "4. SLICE SASHIMI", "身を縦に、指で切る。厚さをそろえて": "Cut across the fillet. Keep the slices even", "頭を落とす": "Behead", "切れていない…": "Not through…", "ストン！": "THUNK!", "ストン": "Thunk", "ゴトッ…": "Clunk…", "三枚におろす": "Fillet", "尾まで引いて": "Go all the way to the tail", "骨に沿った！": "Clean off the bone!", "まずまず": "Not bad", "ガリッ（骨を切った）": "Crunch (cut the bone)", "身が残った…": "Meat left on the bone…", "刺身を引く": "Slice", "盛り付ける": "Plate it", "五、盛り付け": "5. PLATING", "大根のつま：指でなぞった向きと長さで盛る": "Daikon: drag to set its direction and size", "大葉：なぞった向きに置く": "Shiso leaf: drag to lay it down", "指で弧を描くと刺身が流れるように並ぶ（描き直せる）": "Draw an arc: the slices follow it (draw again to redo)", "最後にわさびをタップ": "Finally, tap to place the wasabi", "できあがり": "Done", "親方に見せる": "Show the master", "もっと長く": "Longer", "奇数の切れ数で品がある": "An odd number of slices: elegant", "切れ数は奇数が品よく見える": "An odd number of slices looks better", "ゆるやかな弧が美しい": "A beautiful gentle curve", "一直線で硬い": "A straight line feels stiff", "巻きすぎ": "Curled too much", "線がぶれている": "The line wobbles", "余白が生きている": "Good use of empty space", "皿いっぱいで窮屈": "Crowded plate", "小さくまとまりすぎ": "Too small and tight", "つまを奥に立てて立体的": "Daikon at the back: nice depth", "つまは刺身の奥に": "Daikon goes behind the slices", "大葉はつまと刺身の間に": "Shiso goes between daikon and slices", "わさびの置き所がいい": "Wasabi in the right place", "わさびは手前の脇に": "Wasabi goes at the front side", "ど真ん中で単調": "Dead centre is dull", "片寄りすぎ": "Too far off to one side", "親方": "MASTER", "板前": "ITAMAE", "追い回し": "KITCHEN HAND", "見習い": "APPRENTICE", "素人": "AMATEUR", "鱗取り": "Scaling", "頭落とし": "Beheading", "三枚おろし": "Filleting", "歩留まり": "Yield", "刺身のそろい": "Even slices", "盛り付け（芸術点）": "Plating (art)", "刺身": "Sashimi"},
+  T = (k) => (LANG === 'ja' ? k : EN[k] || k), PT = (n) => (LANG === 'ja' ? `${n}点` : `${n} pts`), NAME = (f) => (LANG === 'ja' ? f.ja : f.en), FISH = FISHES.find((f) => f.id === QS.get('fish')) || FISHES[3], FID = FISH.id, SKIN = FISH.skin;
+{ const t = document.getElementById('pick'); t.innerHTML = FISHES.map((f) => `<a href="?fish=${f.id}&go=1&lang=${LANG}" class="${f.id === FID ? 'on' : ''}"><img src="assets/${f.id}.png" alt=""><b>${NAME(f)}</b><small>${'★'.repeat(f.lv)}</small></a>`).join(''); }
+if (LANG !== 'ja') {
+  document.documentElement.lang = 'en'; document.title = 'SABAKI — Fish Filleting Game';
+  $('lead').innerHTML = 'Scale it, take off the head, fillet it and slice sashimi, all with your finger.<br>Pick today\'s fish.';
+  $('verdict').textContent = "THE MASTER'S VERDICT"; $('xpost').textContent = 'Share on 𝕏'; $('share').textContent = 'Save image'; $('again').textContent = 'Another fish'; $('next').textContent = 'Next';
+  $('credit').textContent = 'Fish photos made with AI (not real fish)'; $('rank').style.fontSize = '36px';
+}
+$('lang').innerHTML = `<a href="?lang=${LANG === 'ja' ? 'en' : 'ja'}" style="color:#d9b77c">${LANG === 'ja' ? 'English' : '日本語'}</a>`;
 const loadImg = (src) => new Promise((r) => { const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = src; });
 const [FOOD_FLESH, FOOD_SLICE] = await Promise.all([loadImg(`assets/food/${FID}_flesh.jpg`), loadImg(`assets/food/${FID}_slice_cut.png`)]);
 const D = await (await fetch(`assets/${FID}.json`)).json();
@@ -170,10 +179,10 @@ function next(label, fn) { const b = $('next'); b.textContent = label; b.style.d
 
 function stage(n) {
   G.st = n;
-  if (n === 0) stepUI('一、鱗を取る', '尾から頭へ、指でこそげる', true);
-  if (n === 1) stepUI('二、頭を落とす', 'えらの後ろに、指で一本線を引く', false);
-  if (n === 2) stepUI('三、三枚におろす', G.fillets ? '裏も同じく。中骨に沿って' : '切り口の中骨の上に包丁を入れ、尾まで引く', false);
-  if (n === 3) stepUI('四、刺身を引く', '身を縦に、指で切る。厚さをそろえて', false);
+  if (n === 0) stepUI(T('一、鱗を取る'), T('尾から頭へ、指でこそげる'), true);
+  if (n === 1) stepUI(T('二、頭を落とす'), T('えらの後ろに、指で一本線を引く'), false);
+  if (n === 2) stepUI(T('三、三枚におろす'), G.fillets ? T('裏も同じく。中骨に沿って') : T('切り口の中骨の上に包丁を入れ、尾まで引く'), false);
+  if (n === 3) stepUI(T('四、刺身を引く'), T('身を縦に、指で切る。厚さをそろえて'), false);
 }
 
 // ---------------------------------------------------------------- input
@@ -229,7 +238,7 @@ function coverage() {
 setInterval(() => {
   if (G.st !== 0) return;
   G.cover = coverage(); $('meter').firstChild.style.width = `${Math.round(G.cover * 100)}%`;
-  if (G.cover > .8 && $('next').style.display !== 'block') next('頭を落とす', () => { G.score.scale = G.cover; stage(1); });
+  if (G.cover > .8 && $('next').style.display !== 'block') next(T('頭を落とす'), () => { G.score.scale = G.cover; stage(1); });
 }, 250);
 
 // ---------------------------------------------------------------- stage 1: the head
@@ -239,7 +248,7 @@ function headCut(a, b) {
   if (a.y > b.y) [a, b] = [b, a];
   const len = Math.hypot(b.x - a.x, b.y - a.y);
   const mx = (a.x + b.x) / 2;
-  if (len < 120 || Math.abs(b.y - a.y) < len * .6 || mx < BX0 + 40 || mx > BX0 + (BX1 - BX0) * .6 || a.y > top(mx) + 30 || b.y < bot(mx) - 30) { say('切れていない…'); return; }
+  if (len < 120 || Math.abs(b.y - a.y) < len * .6 || mx < BX0 + 40 || mx > BX0 + (BX1 - BX0) * .6 || a.y > top(mx) + 30 || b.y < bot(mx) - 30) { say(T('切れていない…')); return; }
   // extend the line past the fish
   const k = (FH * 2) / (b.y - a.y); cutLine = { a: { x: a.x - (b.x - a.x) * k, y: a.y - (b.y - a.y) * k }, b: { x: b.x + (b.x - a.x) * k, y: b.y + (b.y - a.y) * k } };
   // how far from the ideal line (at the gill cover), in body heights
@@ -249,26 +258,26 @@ function headCut(a, b) {
   const err = (Math.abs(e1) + Math.abs(e2)) / 2 / h, waste = Math.max(0, (e1 + e2) / 2) / (BX1 - BX0);   // too far back throws meat away
   G.score.head = clamp(1 - err * 2.2 - waste * 3, 0, 1);
   G.cut = { t0: performance.now() };
-  SND.knife(); setTimeout(() => { SND.thud(); buzz(30); shake = 1; say(G.score.head > .85 ? 'ストン！' : G.score.head > .6 ? 'ストン' : 'ゴトッ…'); }, 260);
-  setTimeout(() => next('三枚におろす', () => stage(2)), 1100);
+  SND.knife(); setTimeout(() => { SND.thud(); buzz(30); shake = 1; say(G.score.head > .85 ? T('ストン！') : G.score.head > .6 ? T('ストン') : T('ゴトッ…')); }, 260);
+  setTimeout(() => next(T('三枚におろす'), () => stage(2)), 1100);
 }
 
 // ---------------------------------------------------------------- stage 2: three pieces
 function filletStroke() {
   const pth = G.path, endX = PED - 20;
-  if (pth.length < 4 || pth[pth.length - 1].x < endX - 60) { say('尾まで引いて'); G.entry = null; G.path = []; return; }
+  if (pth.length < 4 || pth[pth.length - 1].x < endX - 60) { say(T('尾まで引いて')); G.entry = null; G.path = []; return; }
   // error along the spine, the first fifth counts double: where the knife goes in decides most
   let s = 0, w = 0; const x0 = pth[0].x, L = endX - x0;
   for (const q of pth) { const u = (q.x - x0) / L, wt = u < .2 ? 2 : 1, h = bot(q.x) - top(q.x); if (h <= 0) continue; s += wt * Math.abs(q.y - spineY(q.x)) / h; w += wt; }
   const e = s / w; G.err.push(e);
   const crunch = pth.some((q) => q.y > spineY(q.x) + (bot(q.x) - top(q.x)) * .08);
   if (crunch) { SND.crunch(); buzz([20, 30, 20]); }
-  say(e < .03 ? '骨に沿った！' : e < .07 ? 'まずまず' : crunch ? 'ガリッ（骨を切った）' : '身が残った…');
+  say(e < .03 ? T('骨に沿った！') : e < .07 ? T('まずまず') : crunch ? T('ガリッ（骨を切った）') : T('身が残った…'));
   G.lift = performance.now(); G.entry = null;
   setTimeout(() => {
     G.fillets++; G.lift = 0; G.path = [];
     if (G.fillets < 2) stage(2);
-    else { G.score.fillet = clamp(1 - (G.err[0] + G.err[1]) / 2 * 6, 0, 1); next('刺身を引く', () => stage(3)); }
+    else { G.score.fillet = clamp(1 - (G.err[0] + G.err[1]) / 2 * 6, 0, 1); next(T('刺身を引く'), () => stage(3)); }
   }, 1300);
 }
 
@@ -279,7 +288,7 @@ function sliceCut(a, b) {
   if (dy < (bot(mx) - top(mx)) * .6 || Math.abs(b.x - a.x) > dy * .5 || mx < FILX0 + 20 || mx > FILX1 - 20) return;
   if (G.cuts.some((c) => Math.abs(c.x - mx) < 12)) return;
   G.cuts.push({ x: mx, t: performance.now() }); G.cuts.sort((p, q) => p.x - q.x); SND.slice(); buzz(10); G.pull = { x: mx, t: performance.now() };
-  if (G.cuts.length >= 6 && $('next').style.display !== 'block') next('盛り付ける', plate);
+  if (G.cuts.length >= 6 && $('next').style.display !== 'block') next(T('盛り付ける'), plate);
 }
 let FILX0 = 0, FILX1 = 0;
 
@@ -288,7 +297,7 @@ let FILX0 = 0, FILX1 = 0;
 // tap the tsuma (shredded daikon), tap the shiso leaf, draw an arc for the slices, tap the wasabi. Then the master
 // judges the composition: odd number of slices, a gentle arc, empty space on the plate, layering, balance.
 const PL = { phase: 0, tsuma: null, shiso: null, arc: [], placed: [], wasabi: null, t: 0, art: null };
-const PHASES = [['五、盛り付け', '大根のつま：指でなぞった向きと長さで盛る'], ['五、盛り付け', '大葉：なぞった向きに置く'], ['五、盛り付け', '指で弧を描くと刺身が流れるように並ぶ（描き直せる）'], ['五、盛り付け', '最後にわさびをタップ']];
+const PHASES = [[T('五、盛り付け'), T('大根のつま：指でなぞった向きと長さで盛る')], [T('五、盛り付け'), T('大葉：なぞった向きに置く')], [T('五、盛り付け'), T('指で弧を描くと刺身が流れるように並ぶ（描き直せる）')], [T('五、盛り付け'), T('最後にわさびをタップ')]];
 let SPR = [];   // one sprite per slice: the flesh between two cuts, with the red skin along its top
 function plate() {
   const xs = [FILX0, ...G.cuts.map((c) => c.x), FILX1].sort((a, b) => a - b), w = [];
@@ -313,7 +322,7 @@ function plateDown(p) {
   else if (PL.phase === 3) { PL.arc = [p]; PL.redo = true; return; }   // a long stroke redraws the slices, a tap puts the wasabi
 
 }
-function plateDownWasabi(p) { PL.wasabi = { ...p, t: performance.now() }; PL.phase = 4; stepUI('五、盛り付け', 'できあがり', false); SND.thud(); next('親方に見せる', finishPlate); }
+function plateDownWasabi(p) { PL.wasabi = { ...p, t: performance.now() }; PL.phase = 4; stepUI(T('五、盛り付け'), T('できあがり'), false); SND.thud(); next(T('親方に見せる'), finishPlate); }
 function plateMove(p) { if (PL.place) PL.place.b = p; if ((PL.phase === 2 || PL.redo) && PL.arc.length) { const q = PL.arc[PL.arc.length - 1]; if (Math.hypot(p.x - q.x, p.y - q.y) > 4) PL.arc.push(p); } }
 function plateUp() {
   if (PL.place) {
@@ -326,7 +335,7 @@ function plateUp() {
     if (L < plateGeom().R * .5) { const w = PL.arc[0]; PL.arc = []; PL.phase = 3; return plateDownWasabi(w); } PL.phase = 2; }
   if (PL.phase !== 2 || PL.arc.length < 2) return;
   const { R } = plateGeom(); let L = 0; for (let i = 1; i < PL.arc.length; i++) L += Math.hypot(PL.arc[i].x - PL.arc[i - 1].x, PL.arc[i].y - PL.arc[i - 1].y);
-  if (L < R * .5) { say('もっと長く'); PL.arc = []; return; }
+  if (L < R * .5) { say(T('もっと長く')); PL.arc = []; return; }
   // the slices along the arc, evenly spaced, each standing across it and leaning on the one before
   const n = SPR.length, step = L / Math.max(1, n - 1), at = (d) => { let acc = 0; for (let i = 1; i < PL.arc.length; i++) { const a = PL.arc[i - 1], b = PL.arc[i], l = Math.hypot(b.x - a.x, b.y - a.y); if (acc + l >= d) { const t = (d - acc) / l; return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), a: Math.atan2(b.y - a.y, b.x - a.x) }; } acc += l; } const a = PL.arc[PL.arc.length - 2], b = PL.arc[PL.arc.length - 1]; return { x: b.x, y: b.y, a: Math.atan2(b.y - a.y, b.x - a.x) }; };
   PL.placed = SPR.map((sp, i) => ({ ...at(Math.min(L, i * step)), sp, t: performance.now() + i * 110 }));
@@ -336,47 +345,48 @@ function plateUp() {
 function finishPlate() {
   const { cx, cy, R } = plateGeom(), notes = [];
   let sc = 0;
-  const n = SPR.length; if (n % 2 && n >= 3 && n <= 11) { sc += 12; notes.push(['+', '奇数の切れ数で品がある']); } else notes.push(['-', '切れ数は奇数が品よく見える']);
+  const n = SPR.length; if (n % 2 && n >= 3 && n <= 11) { sc += 12; notes.push(['+', T('奇数の切れ数で品がある')]); } else notes.push(['-', T('切れ数は奇数が品よく見える')]);
   // a gentle arc: total turning between 25 and 140 degrees, no wobble
   let turn = 0, wob = 0, prev = null; for (let i = 2; i < PL.arc.length; i += 2) { const a = PL.arc[i - 2], b = PL.arc[i]; const ang = Math.atan2(b.y - a.y, b.x - a.x); if (prev != null) { let d = ang - prev; d = Math.atan2(Math.sin(d), Math.cos(d)); turn += d; wob += Math.abs(d); } prev = ang; }
   const tdeg = Math.abs(turn) * 57.3, wobble = wob * 57.3 - Math.abs(turn) * 57.3;
-  if (tdeg > 25 && tdeg < 140) { sc += 18; notes.push(['+', 'ゆるやかな弧が美しい']); } else notes.push(['-', tdeg <= 25 ? '一直線で硬い' : '巻きすぎ']);
-  if (wobble < 60) sc += 8; else notes.push(['-', '線がぶれている']);
+  if (tdeg > 25 && tdeg < 140) { sc += 18; notes.push(['+', T('ゆるやかな弧が美しい')]); } else notes.push(['-', tdeg <= 25 ? T('一直線で硬い') : T('巻きすぎ')]);
+  if (wobble < 60) sc += 8; else notes.push(['-', T('線がぶれている')]);
   // empty space: the dish should fill about a third to a half of the plate
   const pts = [...PL.placed.map((q) => q), PL.tsuma, PL.shiso, PL.wasabi].filter(Boolean), xs = pts.map((q) => q.x), ys = pts.map((q) => q.y);
   const fill = ((Math.max(...xs) - Math.min(...xs) + R * .35) * (Math.max(...ys) - Math.min(...ys) + R * .35)) / (Math.PI * R * R);
-  if (fill > .25 && fill < .6) { sc += 18; notes.push(['+', '余白が生きている']); } else notes.push(['-', fill >= .6 ? '皿いっぱいで窮屈' : '小さくまとまりすぎ']);
+  if (fill > .25 && fill < .6) { sc += 18; notes.push(['+', T('余白が生きている')]); } else notes.push(['-', fill >= .6 ? T('皿いっぱいで窮屈') : T('小さくまとまりすぎ')]);
   // layering: tsuma behind (further up the plate than the slices), shiso between them
   const mc = { x: PL.placed.reduce((a, q) => a + q.x, 0) / PL.placed.length, y: PL.placed.reduce((a, q) => a + q.y, 0) / PL.placed.length };
   const dT = Math.hypot(PL.tsuma.x - mc.x, PL.tsuma.y - mc.y) / R;
-  if (PL.tsuma.y < mc.y && dT < .7) { sc += 14; notes.push(['+', 'つまを奥に立てて立体的']); } else notes.push(['-', 'つまは刺身の奥に']);
+  if (PL.tsuma.y < mc.y && dT < .7) { sc += 14; notes.push(['+', T('つまを奥に立てて立体的')]); } else notes.push(['-', T('つまは刺身の奥に')]);
   const dS = Math.hypot(PL.shiso.x - (PL.tsuma.x + mc.x) / 2, PL.shiso.y - (PL.tsuma.y + mc.y) / 2) / R;
-  if (dS < .35) sc += 10; else notes.push(['-', '大葉はつまと刺身の間に']);
+  if (dS < .35) sc += 10; else notes.push(['-', T('大葉はつまと刺身の間に')]);
   // wasabi: near the slices, in front or to the side, not on top
   const dW = Math.min(...PL.placed.map((q) => Math.hypot(q.x - PL.wasabi.x, q.y - PL.wasabi.y))) / R;
-  if (dW > .12 && dW < .4 && PL.wasabi.y >= mc.y - R * .1) { sc += 10; notes.push(['+', 'わさびの置き所がいい']); } else notes.push(['-', 'わさびは手前の脇に']);
+  if (dW > .12 && dW < .4 && PL.wasabi.y >= mc.y - R * .1) { sc += 10; notes.push(['+', T('わさびの置き所がいい')]); } else notes.push(['-', T('わさびは手前の脇に')]);
   // balance: the whole dish a little off centre (thirds), not dead centre and not falling off
   const gx = (mc.x + PL.tsuma.x) / 2 - cx, gy = (mc.y + PL.tsuma.y) / 2 - cy, off = Math.hypot(gx, gy) / R;
-  if (off > .08 && off < .35) sc += 10; else notes.push(['-', off <= .08 ? 'ど真ん中で単調' : '片寄りすぎ']);
+  if (off > .08 && off < .35) sc += 10; else notes.push(['-', off <= .08 ? T('ど真ん中で単調') : T('片寄りすぎ')]);
   G.score.art = clamp(sc / 100, 0, 1); PL.art = notes;
   SND.ding(); setTimeout(showResult, 500);
 }
 function showResult() {
   const s = G.score, yieldPct = Math.round(clamp(.58 - (G.err[0] + G.err[1]) / 2 * 1.4 - (1 - s.head) * .06, .3, .6) * 100);
   const total = (s.scale * .15 + s.head * .15 + s.fillet * .3 + s.sashimi * .15 + (s.art || 0) * .25);
-  const rank = total > .9 ? '親方' : total > .78 ? '板前' : total > .62 ? '追い回し' : total > .45 ? '見習い' : '素人';
+  const rank = total > .9 ? T('親方') : total > .78 ? T('板前') : total > .62 ? T('追い回し') : total > .45 ? T('見習い') : T('素人');
   $('rank').textContent = rank;
   const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
-  $('tbl').innerHTML = row('鱗取り', `${Math.round(s.scale * 100)}%`) + row('頭落とし', `${Math.round(s.head * 100)}点`) + row('三枚おろし', `${Math.round(s.fillet * 100)}点`) + row('歩留まり', `${yieldPct}%`) + row('刺身のそろい', `${Math.round(s.sashimi * 100)}点（${G.slices.length}切れ）`) + row('盛り付け（芸術点）', `${Math.round((s.art || 0) * 100)}点`)
+  $('tbl').innerHTML = row(T('鱗取り'), `${Math.round(s.scale * 100)}%`) + row(T('頭落とし'), PT(Math.round(s.head * 100))) + row(T('三枚おろし'), PT(Math.round(s.fillet * 100))) + row(T('歩留まり'), `${yieldPct}%`) + row(T('刺身のそろい'), `${PT(Math.round(s.sashimi * 100))}${LANG === 'ja' ? `（${G.slices.length}切れ）` : ` (${G.slices.length} slices)`}`) + row(T('盛り付け（芸術点）'), PT(Math.round((s.art || 0) * 100)))
     + `<tr><td colspan=2 style="font-size:12px;text-align:left;font-weight:normal;color:#6b5540">${(PL.art || []).slice(0, 4).map(([k, t]) => (k === '+' ? '◎ ' : '△ ') + t).join('<br>')}</td></tr>`;
   G.result = { rank, yieldPct, total };
   // a post for X: the fish, the rank and the numbers people compare; the link opens the same fish
-  const url = `${location.origin}${location.pathname}?fish=${FID}`;
-  const text = `${FISH.ja}を一尾さばいた🔪\n親方の鑑定は「${rank}」\n歩留まり${yieldPct}%｜三枚おろし${Math.round(s.fillet * 100)}点｜盛り付け${Math.round((s.art || 0) * 100)}点\nあなたは何段？`;
-  $('xpost').onclick = () => open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}&hashtags=${encodeURIComponent('一尾入魂,魚さばきゲーム')}`, '_blank', 'noopener');
+  const url = `${location.origin}${location.pathname}?fish=${FID}&lang=${LANG}`;
+  const text = LANG === 'ja' ? `${FISH.ja}を一尾さばいた🔪\n親方の鑑定は「${rank}」\n歩留まり${yieldPct}%｜三枚おろし${Math.round(s.fillet * 100)}点｜盛り付け${Math.round((s.art || 0) * 100)}点\nあなたは何段？`
+    : `I filleted a ${FISH.en.toLowerCase()} 🔪\nThe master's verdict: ${rank}\nYield ${yieldPct}% | Filleting ${Math.round(s.fillet * 100)} | Plating ${Math.round((s.art || 0) * 100)}\nCan you beat it?`;
+  $('xpost').onclick = () => open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}&hashtags=${encodeURIComponent(LANG === 'ja' ? '一尾入魂,魚さばきゲーム' : 'SABAKI,fishgame')}`, '_blank', 'noopener');
   $('result').style.display = 'grid';
 }
-$('again').onclick = () => { location.href = location.pathname; };
+$('again').onclick = () => { location.href = `${location.pathname}?lang=${LANG}`; };
 $('share').onclick = async () => {
   const c = mk(1200, 630), g = c.getContext('2d');
   g.fillStyle = '#1d1a17'; g.fillRect(0, 0, 1200, 630); g.drawImage(cv, 0, 0, cv.width, cv.height, 0, 0, 1200 * cv.width / cv.height > 1200 ? 1200 : 630 * cv.width / cv.height, 630);
@@ -384,10 +394,10 @@ $('share').onclick = async () => {
   g.fillStyle = '#8a6b45'; g.font = 'bold 22px serif'; g.fillText('一尾入魂 SABAKI', 790, 110);
   g.fillStyle = SKIN; g.font = 'bold 84px serif'; g.fillText(G.result.rank, 790, 220);
   g.fillStyle = '#2b2420'; g.font = 'bold 26px serif';
-  [['鱗取り', `${Math.round(G.score.scale * 100)}%`], ['頭落とし', `${Math.round(G.score.head * 100)}点`], ['三枚おろし', `${Math.round(G.score.fillet * 100)}点`], ['歩留まり', `${G.result.yieldPct}%`], ['刺身', `${Math.round(G.score.sashimi * 100)}点`]]
+  [[T('鱗取り'), `${Math.round(G.score.scale * 100)}%`], [T('頭落とし'), PT(Math.round(G.score.head * 100))], [T('三枚おろし'), PT(Math.round(G.score.fillet * 100))], [T('歩留まり'), `${G.result.yieldPct}%`], [T('刺身'), PT(Math.round(G.score.sashimi * 100))]]
     .forEach(([k, v], i) => { g.fillText(k, 790, 290 + i * 50); g.textAlign = 'right'; g.fillText(v, 1130, 290 + i * 50); g.textAlign = 'left'; });
   const blob = await new Promise((r) => c.toBlob(r, 'image/png')), f = new File([blob], 'sabaki.png', { type: 'image/png' });
-  if (navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f], text: `${FISH.ja}を一尾さばいた🔪 親方の鑑定は「${G.result.rank}」 #一尾入魂 #魚さばきゲーム` }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+  if (navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f], text: LANG === 'ja' ? `${FISH.ja}を一尾さばいた🔪 親方の鑑定は「${G.result.rank}」 #一尾入魂 #魚さばきゲーム` : `I filleted a ${FISH.en.toLowerCase()} 🔪 Verdict: ${G.result.rank} #SABAKI #fishgame` }); return; } catch (e) { if (e.name === 'AbortError') return; } }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sabaki.png'; a.click();
 };
 

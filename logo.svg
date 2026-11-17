@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- BLOCKYCLAW mark: three claw scratches built from blocks -->
+  <rect width="64" height="64" rx="14" fill="#141414"/>
+  <g fill="#ffcf4a">
+    <rect x="12" y="10" width="7" height="7"/><rect x="16" y="18" width="7" height="7"/><rect x="20" y="26" width="7" height="7"/><rect x="24" y="34" width="7" height="7"/><rect x="28" y="42" width="7" height="7" opacity=".55"/>
+    <rect x="24" y="8" width="7" height="7"/><rect x="28" y="16" width="7" height="7"/><rect x="32" y="24" width="7" height="7"/><rect x="36" y="32" width="7" height="7"/><rect x="40" y="40" width="7" height="7"/><rect x="44" y="48" width="7" height="7" opacity=".55"/>
+    <rect x="36" y="10" width="7" height="7"/><rect x="40" y="18" width="7" height="7"/><rect x="44" y="26" width="7" height="7"/><rect x="48" y="34" width="7" height="7" opacity=".55"/>
+  </g>
+</svg>
