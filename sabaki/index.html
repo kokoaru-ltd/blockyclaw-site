@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>さばき 一尾入魂 SABAKI</title>
+<meta name="description" content="指で鱗を取り、頭を落とし、三枚におろして刺身を引く。まな板の上の魚さばきゲーム。">
+<style>
+:root{--ink:#2b2420;--paper:#f6efe4;--red:#c8332b;--wood:#c9a36b}
+*{box-sizing:border-box;margin:0;-webkit-user-select:none;user-select:none}
+html,body{height:100%;overflow:hidden;background:#1d1a17;color:var(--ink);font:15px/1.5 "Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif;-webkit-tap-highlight-color:transparent;touch-action:none}
+canvas{position:fixed;inset:0;width:100%;height:100%}
+#ui{position:fixed;left:0;right:0;top:max(10px,env(safe-area-inset-top));text-align:center;pointer-events:none}
+#step{display:inline-block;max-width:calc(100vw - 24px);background:#f6efe4ee;border-radius:4px;padding:6px 14px;box-shadow:0 2px 8px #0004;font-weight:bold;letter-spacing:.08em}
+#step small{display:block;font-weight:normal;font-size:12px;letter-spacing:0}
+#meter{width:min(70vw,320px);height:6px;margin:6px auto 0;background:#0003;border-radius:3px;overflow:hidden;display:none}
+#meter i{display:block;height:100%;width:0;background:var(--red)}
+#say{position:fixed;left:50%;top:42%;transform:translate(-50%,-50%) scale(.6);font-size:clamp(22px,8vw,44px);max-width:92vw;text-align:center;font-weight:900;color:#fff;text-shadow:0 3px 0 var(--red),0 0 18px #000a;opacity:0;pointer-events:none;white-space:normal;line-height:1.25;transition:transform .25s cubic-bezier(.2,1.6,.4,1),opacity .2s}
+#say.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#next{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom));transform:translateX(-50%);font:bold 17px inherit;font-family:inherit;padding:12px 28px;border:0;border-radius:4px;background:var(--red);color:#fff;box-shadow:0 4px 0 #7d1f19;display:none;letter-spacing:.1em}
+#title,#result{position:fixed;inset:0;display:grid;place-items:center;background:#1d1a17e8;color:var(--paper);text-align:center;padding:24px}
+#title h1{font-size:clamp(32px,11vw,46px);letter-spacing:.2em;line-height:1.2}
+#title h1 small{display:block;font-size:14px;letter-spacing:.5em;color:#d9b77c}
+#title p{margin:14px 0 16px;color:#d6cbb8}
+#pick{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:420px;margin:0 auto}
+#pick a{display:block;background:#2b241d;border:1px solid #5a4630;border-radius:6px;padding:6px 4px;color:var(--paper);text-decoration:none}
+#pick a.on{border-color:#d9b77c}#pick img{width:100%;aspect-ratio:2/1;object-fit:contain}#pick b{display:block;font-size:16px}#pick small{color:#d9b77c;font-size:11px}
+#title button,#result button{font:bold 18px inherit;font-family:inherit;padding:12px 34px;border:0;border-radius:4px;background:var(--red);color:#fff;box-shadow:0 4px 0 #7d1f19;letter-spacing:.15em;margin:6px}
+#result{display:none;background:#1d1a17cc}
+#card{background:var(--paper);color:var(--ink);border-radius:6px;padding:18px 22px;max-width:360px;width:100%;box-shadow:0 10px 40px #000}
+#card h2{font-size:15px;letter-spacing:.3em;color:#8a6b45}
+#rank{font-size:52px;font-weight:900;color:var(--red);line-height:1.2;margin:2px 0 6px}
+#card table{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0 12px}
+#card td{padding:4px 0;border-bottom:1px dotted #b9a68a}
+#card td:last-child{text-align:right;font-weight:bold}
+#credit{position:fixed;right:8px;bottom:4px;font-size:10px;color:#fff6;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui"><div id="step"></div><div id="meter"><i></i></div></div>
+<div id="say"></div>
+<button id="next">次へ</button>
+<div id="title"><div>
+  <h1><small>SABAKI</small>一尾入魂</h1>
+  <p>指で鱗を取り、頭を落とし、三枚におろして刺身を引く。<br>今日の魚を選んで。</p>
+  <div id="pick"></div>
+</div></div>
+<div id="result"><div id="card">
+  <h2>親 方 の 鑑 定</h2>
+  <div id="rank"></div>
+  <table id="tbl"></table>
+  <button id="share">結果を保存</button><button id="again">もう一尾</button>
+</div></div>
+<div id="credit">魚の写真：AIで作成（実在の個体ではありません）</div>
+
+<script type="module">
+// ============================================================================
+// SABAKI — a fish-filleting game for the phone browser. Canvas 2D, no libraries.
+// The fish is one photo (cut out) plus its body outline; everything that happens to it (scales, cuts, flesh, bones,
+// slices) is drawn on top of that photo in code. All coordinates are in the photo's pixels (F space); a view
+// transform fits the board to the screen and turns it upright on a portrait phone.
+// Stages: 0 scales  1 head  2 fillet (two strokes)  3 sashimi  4 plate + appraisal
+// ============================================================================
+const $ = (id) => document.getElementById(id);
+const cv = $('c'), x = cv.getContext('2d');
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v)), lerp = (a, b, t) => a + (b - a) * t, ease = (t) => t * t * (3 - 2 * t);
+const back = (t) => 1 + 2.7 * (t - 1) ** 3 + 1.7 * (t - 1) ** 2;
+
+// ---------------------------------------------------------------- assets
+// the fish of the day: ?fish=<id> (the title screen sets it)
+const FISHES = [
+  { id: 'aji', ja: '鯵', en: 'Horse mackerel', skin: '#9fa9a6', lv: 1 },
+  { id: 'saba', ja: '鯖', en: 'Mackerel', skin: '#4f7f86', lv: 2 },
+  { id: 'madai', ja: '真鯛', en: 'Red sea bream', skin: '#d4565a', lv: 2 },
+  { id: 'kinmedai', ja: '金目鯛', en: 'Splendid alfonsino', skin: '#c8332b', lv: 2 },
+  { id: 'buri', ja: '鰤', en: 'Yellowtail', skin: '#6f8fa0', lv: 3 },
+  { id: 'katsuo', ja: '鰹', en: 'Skipjack', skin: '#2f3f86', lv: 3 },
+];
+const QS = new URLSearchParams(location.search), FISH = FISHES.find((f) => f.id === QS.get('fish')) || FISHES[3], FID = FISH.id, SKIN = FISH.skin;
+{ const t = document.getElementById('pick'); t.innerHTML = FISHES.map((f) => `<a href="?fish=${f.id}&go=1" class="${f.id === FID ? 'on' : ''}"><img src="assets/${f.id}.png" alt=""><b>${f.ja}</b><small>${'★'.repeat(f.lv)}</small></a>`).join(''); }
+const loadImg = (src) => new Promise((r) => { const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = src; });
+const [FOOD_FLESH, FOOD_SLICE] = await Promise.all([loadImg(`assets/food/${FID}_flesh.jpg`), loadImg(`assets/food/${FID}_slice_cut.png`)]);
+const D = await (await fetch(`assets/${FID}.json`)).json();
+const IMG = await new Promise((r) => { const i = new Image(); i.onload = () => r(i); i.src = `assets/${FID}.png`; });
+const FW = D.w, FH = D.h, [BX0, BX1] = D.body;
+const top = (px) => D.top[clamp(Math.round(px), 0, FW - 1)], bot = (px) => D.bot[clamp(Math.round(px), 0, FW - 1)];
+const spineY = (px) => { const s = D.spine; if (px <= s[0][0]) return s[0][1]; for (let i = 1; i < s.length; i++) if (s[i][0] >= px) { const a = s[i - 1], b = s[i]; return lerp(a[1], b[1], (px - a[0]) / (b[0] - a[0])); } return s[s.length - 1][1]; };
+const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+const bodyPath = (g, x0 = BX0, x1 = BX1, pad = 0) => { g.beginPath(); for (let i = x0; i <= x1; i += 4) { if (top(i) < 0) continue; g.lineTo(i, top(i) - pad); } for (let i = x1; i >= x0; i -= 4) { if (bot(i) < 0) continue; g.lineTo(i, bot(i) + pad); } g.closePath(); };
+
+// the scaled skin (the photo) and the same fish with the scales gone: softer, glossier, a little darker and redder
+const scaled = mk(FW, FH); scaled.getContext('2d').drawImage(IMG, 0, 0);
+const skin = mk(FW, FH);
+{
+  const g = skin.getContext('2d'), sd = scaled.getContext('2d').getImageData(0, 0, FW, FH), s = sd.data, o = g.createImageData(FW, FH), d = o.data;
+  const blur = new Float32Array(FW * FH * 3);
+  for (let y = 0; y < FH; y++) for (let xx = 0; xx < FW; xx++) {   // 5x5 box blur of the colour
+    let r = 0, gg = 0, b = 0, n = 0;
+    for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) { const X = xx + i, Y = y + j; if (X < 0 || Y < 0 || X >= FW || Y >= FH) continue; const k = (Y * FW + X) * 4; if (s[k + 3] < 128) continue; r += s[k]; gg += s[k + 1]; b += s[k + 2]; n++; }
+    const q = (y * FW + xx) * 3; if (n) { blur[q] = r / n; blur[q + 1] = gg / n; blur[q + 2] = b / n; }
+  }
+  for (let i = 0, q = 0; i < s.length; i += 4, q += 3) {
+    let r = lerp(s[i], blur[q], .88), gg = lerp(s[i + 1], blur[q + 1], .88), b = lerp(s[i + 2], blur[q + 2], .88);
+    const L = (r + gg + b) / 3; r = L + (r - L) * 1.25; gg = L + (gg - L) * 1.25; b = L + (b - L) * 1.25;
+    d[i] = r * .9; d[i + 1] = gg * .86; d[i + 2] = b * .88; d[i + 3] = s[i + 3];
+  }
+  g.putImageData(o, 0, 0);
+  // wet sheen along the back, only on the body
+  g.save(); bodyPath(g); g.clip(); g.globalCompositeOperation = 'lighter';
+  for (let i = BX0; i < BX1; i += 3) { const t = top(i), h = bot(i) - t; if (t < 0) continue; const gr = g.createLinearGradient(0, t, 0, t + h * .5); gr.addColorStop(0, '#0000'); gr.addColorStop(.22, '#ffffff40'); gr.addColorStop(.3, '#ffffff18'); gr.addColorStop(1, '#0000'); g.fillStyle = gr; g.fillRect(i, t, 3, h); }
+  g.restore();
+}
+// scale mask: white where scales are still on. Only the body behind the head has scales here
+const smask = mk(FW, FH), sm = smask.getContext('2d'); sm.fillStyle = '#fff'; sm.fillRect(0, 0, FW, FH);
+const SCALE_X0 = D.cut[1][0] - 10, SCALE_X1 = BX1 - 24;
+// flesh: white with a blush of pink, the W-shaped muscle bands, a red line under the skin
+function fleshCanvas(w, h, seed) {
+  const c = mk(w, h), g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#e9a99a'); gr.addColorStop(.18, '#f4cfc4'); gr.addColorStop(.5, '#f9e2da'); gr.addColorStop(.82, '#f2c9bd'); gr.addColorStop(1, '#e39d8e'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  g.strokeStyle = '#d98f8066'; g.lineWidth = 2.5;
+  for (let i = -h; i < w + h; i += 22) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + h * .25, h * .45); g.lineTo(i - h * .05, h * .55); g.lineTo(i + h * .25, h); g.stroke(); }
+  let r = seed; const rnd = () => ((r = (r * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < w * h / 90; i++) { g.fillStyle = `rgba(255,255,255,${rnd() * .18})`; g.fillRect(rnd() * w, rnd() * h, 1 + rnd() * 2, 1); }
+  return c;
+}
+const FLESH = fleshCanvas(FW, FH, 7);
+if (FOOD_FLESH) { const g = FLESH.getContext('2d'), k = Math.max(FW / FOOD_FLESH.width, FH / FOOD_FLESH.height) * 1.15; g.drawImage(FOOD_FLESH, (FW - FOOD_FLESH.width * k) / 2, (FH - FOOD_FLESH.height * k) / 2, FOOD_FLESH.width * k, FOOD_FLESH.height * k);
+  const v = g.createLinearGradient(0, 0, 0, FH); v.addColorStop(0, 'rgba(120,40,30,.18)'); v.addColorStop(.2, 'rgba(0,0,0,0)'); v.addColorStop(.8, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(120,40,30,.18)'); g.fillStyle = v; g.fillRect(0, 0, FW, FH); }
+
+// ---------------------------------------------------------------- view: fit the board, upright on a portrait phone
+let VW = 0, VH = 0, DPR = 1, M = new DOMMatrix(), MI = new DOMMatrix();
+function resize() {
+  DPR = Math.min(devicePixelRatio || 1, 2); VW = innerWidth; VH = innerHeight; cv.width = VW * DPR; cv.height = VH * DPR;
+  const port = VH > VW, sw = port ? VH : VW, sh = port ? VW : VH;
+  const s = Math.min(sw * .86 / FW, sh * (port ? .98 : .7) / FH);
+  M = new DOMMatrix().scale(DPR).translate(VW / 2, VH / 2 + (port ? 10 : 18));
+  if (port) M = M.rotate(90);
+  M = M.scale(s).translate(-FW / 2, -FH / 2); MI = M.inverse();
+  SC = s;
+}
+let SC = 1; addEventListener('resize', resize); resize();
+const toF = (e) => { const p = new DOMPoint(e.clientX * DPR, e.clientY * DPR).matrixTransform(MI); return { x: p.x, y: p.y }; };
+
+// ---------------------------------------------------------------- sound: everything synthesized
+let AC, NB;
+const audio = () => { if (AC) return; AC = new (window.AudioContext || window.webkitAudioContext)(); NB = AC.createBuffer(1, AC.sampleRate, AC.sampleRate); const d = NB.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; };
+function noise(f, q, v, dur, f2) { if (!AC) return; const t = AC.currentTime, s = AC.createBufferSource(), b = AC.createBiquadFilter(), g = AC.createGain(); s.buffer = NB; b.type = 'bandpass'; b.frequency.setValueAtTime(f, t); if (f2) b.frequency.exponentialRampToValueAtTime(f2, t + dur); b.Q.value = q; g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.001, t + dur); s.connect(b); b.connect(g); g.connect(AC.destination); s.start(t, Math.random() * .5); s.stop(t + dur); }
+function tone(f0, f1, v, dur, type = 'sine') { if (!AC) return; const t = AC.currentTime, o = AC.createOscillator(), g = AC.createGain(); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur); g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.001, t + dur); o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + dur); }
+const SND = {
+  scrape: () => noise(2600 + Math.random() * 1600, 2.5, .22, .07),
+  knife: () => noise(5000, 1.2, .25, .35, 1500),
+  thud: () => { tone(140, 45, .9, .25); noise(300, 1, .5, .12); },
+  slice: () => { noise(6000, 2, .25, .09, 2500); tone(900, 600, .05, .05, 'triangle'); },
+  crunch: () => noise(1200, 3, .5, .12),
+  ding: () => { tone(880, 880, .25, .9, 'triangle'); tone(1320, 1320, .12, 1.2, 'triangle'); },
+};
+const buzz = (ms) => navigator.vibrate && navigator.vibrate(ms);
+
+// ---------------------------------------------------------------- game state
+const G = { st: -1, cover: 0, cut: null, headT: 0, entry: null, path: [], fillets: 0, err: [], lift: 0, cuts: [], slices: [], score: {} };
+const P = [];   // particles: scale flakes, sparks
+function say(t) { const s = $('say'); s.textContent = t; s.classList.add('on'); clearTimeout(say.t); say.t = setTimeout(() => s.classList.remove('on'), 900); }
+function stepUI(t, sub, meter) { $('step').innerHTML = `${t}<small>${sub}</small>`; $('meter').style.display = meter ? 'block' : 'none'; }
+function next(label, fn) { const b = $('next'); b.textContent = label; b.style.display = 'block'; b.onclick = () => { b.style.display = 'none'; fn(); }; }
+
+function stage(n) {
+  G.st = n;
+  if (n === 0) stepUI('一、鱗を取る', '尾から頭へ、指でこそげる', true);
+  if (n === 1) stepUI('二、頭を落とす', 'えらの後ろに、指で一本線を引く', false);
+  if (n === 2) stepUI('三、三枚におろす', G.fillets ? '裏も同じく。中骨に沿って' : '切り口の中骨の上に包丁を入れ、尾まで引く', false);
+  if (n === 3) stepUI('四、刺身を引く', '身を縦に、指で切る。厚さをそろえて', false);
+}
+
+// ---------------------------------------------------------------- input
+let drag = null;
+const toP = (e) => (G.st === 4 ? { x: e.clientX, y: e.clientY } : G.st === 2 ? toG(toF(e)) : toF(e));
+cv.addEventListener('pointerdown', (e) => { audio(); cv.setPointerCapture(e.pointerId); const p = toP(e); drag = { p0: p, p, last: p, t: performance.now() }; down(p); });
+cv.addEventListener('pointermove', (e) => { if (!drag) return; const p = toP(e); move(p, drag.last); drag.last = p; drag.p = p; });
+cv.addEventListener('pointerup', (e) => { if (!drag) return; const p = toP(e); move(p, drag.last); up(drag.p0, p); drag = null; });
+cv.addEventListener('pointercancel', () => { drag = null; G.path = []; });
+
+const inBody = (p, pad = 0) => p.x > BX0 && p.x < BX1 && top(p.x) >= 0 && p.y > top(p.x) - pad && p.y < bot(p.x) + pad;
+function down(p) {
+  if (G.st === 4) return plateDown(p);
+  if (G.st === 2 && !G.lift) {
+    const cx = cutX(spineY(p.x));
+    if (Math.abs(p.x - cx) < 70 && p.y > top(cx + 10) - 20 && p.y < bot(cx + 10) + 20) { G.entry = { x: cx, y: p.y }; G.path = [{ x: cx, y: p.y }]; SND.knife(); buzz(8); }
+  }
+}
+let scrapeT = 0;
+function move(p, q) {
+  if (G.st === 4) return plateMove(p);
+  if (G.st === 0) {
+    const dx = p.x - q.x, dist = Math.hypot(dx, p.y - q.y); if (!dist) return;
+    const against = clamp(-dx / dist, 0, 1);                       // tail to head (against the scales) works best
+    sm.save(); sm.globalCompositeOperation = 'destination-out'; bodyPath(sm, SCALE_X0, SCALE_X1); sm.clip();
+    const R = 30, steps = Math.ceil(dist / 6);
+    for (let i = 0; i <= steps; i++) { const t = i / steps, X = lerp(q.x, p.x, t), Y = lerp(q.y, p.y, t), g = sm.createRadialGradient(X, Y, 0, X, Y, R);
+      g.addColorStop(0, `rgba(0,0,0,${.35 + .6 * against})`); g.addColorStop(1, 'rgba(0,0,0,0)'); sm.fillStyle = g; sm.fillRect(X - R, Y - R, R * 2, R * 2); }
+    sm.restore();
+    if (inBody(p) && p.x > SCALE_X0 && p.x < SCALE_X1) {
+      const n = Math.round(1 + 4 * against * Math.min(1, dist / 12));
+      for (let i = 0; i < n; i++) P.push({ x: p.x + (Math.random() - .5) * 30, y: p.y + (Math.random() - .5) * 30, vx: -dx * 4 + (Math.random() - .5) * 300, vy: (Math.random() - .5) * 300 - 120, r: Math.random() * 6.28, vr: (Math.random() - .5) * 20, s: 4 + Math.random() * 5, life: .7, c: Math.random() < .5 ? '#f6d0c8' : '#ffffff' });
+      const now = performance.now(); if (now - scrapeT > 55) { scrapeT = now; SND.scrape(); buzz(4); }
+    }
+  }
+  if (G.st === 2 && G.entry && !G.lift) { if (p.x > G.path[G.path.length - 1].x) G.path.push({ x: p.x, y: p.y }); if (Math.random() < .25) SND.knife(); }
+  if (G.st === 1 || G.st === 3) G.drawLine = { a: drag.p0, b: p };
+}
+function up(a, b) {
+  if (G.st === 4) return plateUp();
+  G.drawLine = null;
+  if (G.st === 1 && !G.cut) headCut(a, b);
+  if (G.st === 2 && G.entry && !G.lift) filletStroke();
+  if (G.st === 3) sliceCut(a, b);
+}
+
+// ---------------------------------------------------------------- stage 0: scales
+function coverage() {
+  const d = sm.getImageData(0, 0, FW, FH).data; let on = 0, n = 0;
+  for (let X = SCALE_X0; X < SCALE_X1; X += 8) for (let Y = top(X) + 6; Y < bot(X) - 6; Y += 8) { n++; if (d[(Math.round(Y) * FW + Math.round(X)) * 4 + 3] > 100) on++; }
+  return n ? 1 - on / n : 0;
+}
+setInterval(() => {
+  if (G.st !== 0) return;
+  G.cover = coverage(); $('meter').firstChild.style.width = `${Math.round(G.cover * 100)}%`;
+  if (G.cover > .8 && $('next').style.display !== 'block') next('頭を落とす', () => { G.score.scale = G.cover; stage(1); });
+}, 250);
+
+// ---------------------------------------------------------------- stage 1: the head
+let cutLine = null;   // {a, b} in F space; the body is on the right of a->b
+const cutX = (y) => cutLine ? lerp(cutLine.a.x, cutLine.b.x, (y - cutLine.a.y) / (cutLine.b.y - cutLine.a.y)) : 0;
+function headCut(a, b) {
+  if (a.y > b.y) [a, b] = [b, a];
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  const mx = (a.x + b.x) / 2;
+  if (len < 120 || Math.abs(b.y - a.y) < len * .6 || mx < BX0 + 40 || mx > BX0 + (BX1 - BX0) * .6 || a.y > top(mx) + 30 || b.y < bot(mx) - 30) { say('切れていない…'); return; }
+  // extend the line past the fish
+  const k = (FH * 2) / (b.y - a.y); cutLine = { a: { x: a.x - (b.x - a.x) * k, y: a.y - (b.y - a.y) * k }, b: { x: b.x + (b.x - a.x) * k, y: b.y + (b.y - a.y) * k } };
+  // how far from the ideal line (at the gill cover), in body heights
+  const [i0, i1] = D.cut, ideal = (y) => lerp(i0[0], i1[0], (y - i0[1]) / (i1[1] - i0[1]));
+  const yA = top(mx), yB = bot(mx), h = yB - yA;
+  const e1 = cutX(yA) - ideal(yA), e2 = cutX(yB) - ideal(yB);
+  const err = (Math.abs(e1) + Math.abs(e2)) / 2 / h, waste = Math.max(0, (e1 + e2) / 2) / (BX1 - BX0);   // too far back throws meat away
+  G.score.head = clamp(1 - err * 2.2 - waste * 3, 0, 1);
+  G.cut = { t0: performance.now() };
+  SND.knife(); setTimeout(() => { SND.thud(); buzz(30); shake = 1; say(G.score.head > .85 ? 'ストン！' : G.score.head > .6 ? 'ストン' : 'ゴトッ…'); }, 260);
+  setTimeout(() => next('三枚におろす', () => stage(2)), 1100);
+}
+
+// ---------------------------------------------------------------- stage 2: three pieces
+function filletStroke() {
+  const pth = G.path, endX = PED - 20;
+  if (pth.length < 4 || pth[pth.length - 1].x < endX - 60) { say('尾まで引いて'); G.entry = null; G.path = []; return; }
+  // error along the spine, the first fifth counts double: where the knife goes in decides most
+  let s = 0, w = 0; const x0 = pth[0].x, L = endX - x0;
+  for (const q of pth) { const u = (q.x - x0) / L, wt = u < .2 ? 2 : 1, h = bot(q.x) - top(q.x); if (h <= 0) continue; s += wt * Math.abs(q.y - spineY(q.x)) / h; w += wt; }
+  const e = s / w; G.err.push(e);
+  const crunch = pth.some((q) => q.y > spineY(q.x) + (bot(q.x) - top(q.x)) * .08);
+  if (crunch) { SND.crunch(); buzz([20, 30, 20]); }
+  say(e < .03 ? '骨に沿った！' : e < .07 ? 'まずまず' : crunch ? 'ガリッ（骨を切った）' : '身が残った…');
+  G.lift = performance.now(); G.entry = null;
+  setTimeout(() => {
+    G.fillets++; G.lift = 0; G.path = [];
+    if (G.fillets < 2) stage(2);
+    else { G.score.fillet = clamp(1 - (G.err[0] + G.err[1]) / 2 * 6, 0, 1); next('刺身を引く', () => stage(3)); }
+  }, 1300);
+}
+
+// ---------------------------------------------------------------- stage 3: sashimi
+// the fillet laid skin-up across the board; cuts are x positions in F space
+function sliceCut(a, b) {
+  const dy = Math.abs(b.y - a.y), mx = (a.x + b.x) / 2;
+  if (dy < (bot(mx) - top(mx)) * .6 || Math.abs(b.x - a.x) > dy * .5 || mx < FILX0 + 20 || mx > FILX1 - 20) return;
+  if (G.cuts.some((c) => Math.abs(c.x - mx) < 12)) return;
+  G.cuts.push({ x: mx, t: performance.now() }); G.cuts.sort((p, q) => p.x - q.x); SND.slice(); buzz(10); G.pull = { x: mx, t: performance.now() };
+  if (G.cuts.length >= 6 && $('next').style.display !== 'block') next('盛り付ける', plate);
+}
+let FILX0 = 0, FILX1 = 0;
+
+// ---------------------------------------------------------------- stage 4: plate and appraisal
+// ---------------------------------------------------------------- stage 4: plating (screen space)
+// tap the tsuma (shredded daikon), tap the shiso leaf, draw an arc for the slices, tap the wasabi. Then the master
+// judges the composition: odd number of slices, a gentle arc, empty space on the plate, layering, balance.
+const PL = { phase: 0, tsuma: null, shiso: null, arc: [], placed: [], wasabi: null, t: 0, art: null };
+const PHASES = [['五、盛り付け', '大根のつま：指でなぞった向きと長さで盛る'], ['五、盛り付け', '大葉：なぞった向きに置く'], ['五、盛り付け', '指で弧を描くと刺身が流れるように並ぶ（描き直せる）'], ['五、盛り付け', '最後にわさびをタップ']];
+let SPR = [];   // one sprite per slice: the flesh between two cuts, with the red skin along its top
+function plate() {
+  const xs = [FILX0, ...G.cuts.map((c) => c.x), FILX1].sort((a, b) => a - b), w = [];
+  for (let i = 1; i < xs.length; i++) w.push(xs[i] - xs[i - 1]);
+  const mean = w.reduce((a, b) => a + b, 0) / w.length, sd = Math.sqrt(w.reduce((a, b) => a + (b - mean) ** 2, 0) / w.length);
+  G.score.sashimi = clamp(1 - sd / mean * 1.6, 0, 1); G.slices = w;
+  SPR = [];
+  for (let i = 1; i < xs.length; i++) {
+    const a = xs[i - 1], b = xs[i], t0 = Math.min(top(a), top(b)), b0 = Math.max(bot(a), bot(b)), c = mk(Math.ceil(b - a) + 2, Math.ceil(b0 - t0) + 2), g = c.getContext('2d');
+    g.translate(-a + 1, -t0 + 1); g.save(); g.beginPath(); g.rect(a, 0, b - a, FH); g.clip(); bodyPath(g, FILX0, FILX1); g.clip(); g.drawImage(FLESH, 0, 0);
+    g.strokeStyle = SKIN; g.lineWidth = 16; g.beginPath(); for (let X = a; X <= b; X += 2) g.lineTo(X, top(X) + 6); g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,.45)'; g.lineWidth = 2; g.beginPath(); for (let X = a; X <= b; X += 2) g.lineTo(X, top(X) + 3); g.stroke(); g.restore();
+    SPR.push({ c, w: b - a, h: b0 - t0 });
+  }
+  G.st = 4; PL.phase = 0; PL.t = performance.now(); stepUI(...PHASES[0], false); SND.ding();
+}
+const plateGeom = () => { const R = Math.min(VW, VH) * .32; return { cx: VW / 2, cy: VH / 2 + 16, R }; };
+function plateDown(p) {
+  const { cx, cy, R } = plateGeom(); if (Math.hypot(p.x - cx, p.y - cy) > R * .92 && PL.phase !== 2) return;
+  if (PL.phase === 0 || PL.phase === 1) PL.place = { a: p, b: p };
+  else if (PL.phase === 2) PL.arc = [p];
+  else if (PL.phase === 3) { PL.arc = [p]; PL.redo = true; return; }   // a long stroke redraws the slices, a tap puts the wasabi
+
+}
+function plateDownWasabi(p) { PL.wasabi = { ...p, t: performance.now() }; PL.phase = 4; stepUI('五、盛り付け', 'できあがり', false); SND.thud(); next('親方に見せる', finishPlate); }
+function plateMove(p) { if (PL.place) PL.place.b = p; if ((PL.phase === 2 || PL.redo) && PL.arc.length) { const q = PL.arc[PL.arc.length - 1]; if (Math.hypot(p.x - q.x, p.y - q.y) > 4) PL.arc.push(p); } }
+function plateUp() {
+  if (PL.place) {
+    const { a, b } = PL.place, d = Math.hypot(b.x - a.x, b.y - a.y), { R } = plateGeom(), item = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, ang: d > 12 ? Math.atan2(b.y - a.y, b.x - a.x) : 0, len: clamp(d / R, .45, 1.3), t: performance.now() };
+    PL.place = null; SND.slice();
+    if (PL.phase === 0) { PL.tsuma = item; PL.phase = 1; stepUI(...PHASES[1], false); } else { PL.shiso = item; PL.phase = 2; stepUI(...PHASES[2], false); }
+    return;
+  }
+  if (PL.redo) { PL.redo = false; let L = 0; for (let i = 1; i < PL.arc.length; i++) L += Math.hypot(PL.arc[i].x - PL.arc[i - 1].x, PL.arc[i].y - PL.arc[i - 1].y);
+    if (L < plateGeom().R * .5) { const w = PL.arc[0]; PL.arc = []; PL.phase = 3; return plateDownWasabi(w); } PL.phase = 2; }
+  if (PL.phase !== 2 || PL.arc.length < 2) return;
+  const { R } = plateGeom(); let L = 0; for (let i = 1; i < PL.arc.length; i++) L += Math.hypot(PL.arc[i].x - PL.arc[i - 1].x, PL.arc[i].y - PL.arc[i - 1].y);
+  if (L < R * .5) { say('もっと長く'); PL.arc = []; return; }
+  // the slices along the arc, evenly spaced, each standing across it and leaning on the one before
+  const n = SPR.length, step = L / Math.max(1, n - 1), at = (d) => { let acc = 0; for (let i = 1; i < PL.arc.length; i++) { const a = PL.arc[i - 1], b = PL.arc[i], l = Math.hypot(b.x - a.x, b.y - a.y); if (acc + l >= d) { const t = (d - acc) / l; return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), a: Math.atan2(b.y - a.y, b.x - a.x) }; } acc += l; } const a = PL.arc[PL.arc.length - 2], b = PL.arc[PL.arc.length - 1]; return { x: b.x, y: b.y, a: Math.atan2(b.y - a.y, b.x - a.x) }; };
+  PL.placed = SPR.map((sp, i) => ({ ...at(Math.min(L, i * step)), sp, t: performance.now() + i * 110 }));
+  PL.len = L; PL.phase = 3; stepUI(...PHASES[3], false);
+  PL.placed.forEach((q, i) => setTimeout(() => { SND.slice(); buzz(6); }, i * 110));
+}
+function finishPlate() {
+  const { cx, cy, R } = plateGeom(), notes = [];
+  let sc = 0;
+  const n = SPR.length; if (n % 2 && n >= 3 && n <= 11) { sc += 12; notes.push(['+', '奇数の切れ数で品がある']); } else notes.push(['-', '切れ数は奇数が品よく見える']);
+  // a gentle arc: total turning between 25 and 140 degrees, no wobble
+  let turn = 0, wob = 0, prev = null; for (let i = 2; i < PL.arc.length; i += 2) { const a = PL.arc[i - 2], b = PL.arc[i]; const ang = Math.atan2(b.y - a.y, b.x - a.x); if (prev != null) { let d = ang - prev; d = Math.atan2(Math.sin(d), Math.cos(d)); turn += d; wob += Math.abs(d); } prev = ang; }
+  const tdeg = Math.abs(turn) * 57.3, wobble = wob * 57.3 - Math.abs(turn) * 57.3;
+  if (tdeg > 25 && tdeg < 140) { sc += 18; notes.push(['+', 'ゆるやかな弧が美しい']); } else notes.push(['-', tdeg <= 25 ? '一直線で硬い' : '巻きすぎ']);
+  if (wobble < 60) sc += 8; else notes.push(['-', '線がぶれている']);
+  // empty space: the dish should fill about a third to a half of the plate
+  const pts = [...PL.placed.map((q) => q), PL.tsuma, PL.shiso, PL.wasabi].filter(Boolean), xs = pts.map((q) => q.x), ys = pts.map((q) => q.y);
+  const fill = ((Math.max(...xs) - Math.min(...xs) + R * .35) * (Math.max(...ys) - Math.min(...ys) + R * .35)) / (Math.PI * R * R);
+  if (fill > .25 && fill < .6) { sc += 18; notes.push(['+', '余白が生きている']); } else notes.push(['-', fill >= .6 ? '皿いっぱいで窮屈' : '小さくまとまりすぎ']);
+  // layering: tsuma behind (further up the plate than the slices), shiso between them
+  const mc = { x: PL.placed.reduce((a, q) => a + q.x, 0) / PL.placed.length, y: PL.placed.reduce((a, q) => a + q.y, 0) / PL.placed.length };
+  const dT = Math.hypot(PL.tsuma.x - mc.x, PL.tsuma.y - mc.y) / R;
+  if (PL.tsuma.y < mc.y && dT < .7) { sc += 14; notes.push(['+', 'つまを奥に立てて立体的']); } else notes.push(['-', 'つまは刺身の奥に']);
+  const dS = Math.hypot(PL.shiso.x - (PL.tsuma.x + mc.x) / 2, PL.shiso.y - (PL.tsuma.y + mc.y) / 2) / R;
+  if (dS < .35) sc += 10; else notes.push(['-', '大葉はつまと刺身の間に']);
+  // wasabi: near the slices, in front or to the side, not on top
+  const dW = Math.min(...PL.placed.map((q) => Math.hypot(q.x - PL.wasabi.x, q.y - PL.wasabi.y))) / R;
+  if (dW > .12 && dW < .4 && PL.wasabi.y >= mc.y - R * .1) { sc += 10; notes.push(['+', 'わさびの置き所がいい']); } else notes.push(['-', 'わさびは手前の脇に']);
+  // balance: the whole dish a little off centre (thirds), not dead centre and not falling off
+  const gx = (mc.x + PL.tsuma.x) / 2 - cx, gy = (mc.y + PL.tsuma.y) / 2 - cy, off = Math.hypot(gx, gy) / R;
+  if (off > .08 && off < .35) sc += 10; else notes.push(['-', off <= .08 ? 'ど真ん中で単調' : '片寄りすぎ']);
+  G.score.art = clamp(sc / 100, 0, 1); PL.art = notes;
+  SND.ding(); setTimeout(showResult, 500);
+}
+function showResult() {
+  const s = G.score, yieldPct = Math.round(clamp(.58 - (G.err[0] + G.err[1]) / 2 * 1.4 - (1 - s.head) * .06, .3, .6) * 100);
+  const total = (s.scale * .15 + s.head * .15 + s.fillet * .3 + s.sashimi * .15 + (s.art || 0) * .25);
+  const rank = total > .9 ? '親方' : total > .78 ? '板前' : total > .62 ? '追い回し' : total > .45 ? '見習い' : '素人';
+  $('rank').textContent = rank;
+  const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
+  $('tbl').innerHTML = row('鱗取り', `${Math.round(s.scale * 100)}%`) + row('頭落とし', `${Math.round(s.head * 100)}点`) + row('三枚おろし', `${Math.round(s.fillet * 100)}点`) + row('歩留まり', `${yieldPct}%`) + row('刺身のそろい', `${Math.round(s.sashimi * 100)}点（${G.slices.length}切れ）`) + row('盛り付け（芸術点）', `${Math.round((s.art || 0) * 100)}点`)
+    + `<tr><td colspan=2 style="font-size:12px;text-align:left;font-weight:normal;color:#6b5540">${(PL.art || []).slice(0, 4).map(([k, t]) => (k === '+' ? '◎ ' : '△ ') + t).join('<br>')}</td></tr>`;
+  G.result = { rank, yieldPct, total };
+  $('result').style.display = 'grid';
+}
+$('again').onclick = () => { location.href = location.pathname; };
+$('share').onclick = async () => {
+  const c = mk(1200, 630), g = c.getContext('2d');
+  g.fillStyle = '#1d1a17'; g.fillRect(0, 0, 1200, 630); g.drawImage(cv, 0, 0, cv.width, cv.height, 0, 0, 1200 * cv.width / cv.height > 1200 ? 1200 : 630 * cv.width / cv.height, 630);
+  g.fillStyle = '#f6efe4ee'; g.fillRect(760, 60, 400, 510);
+  g.fillStyle = '#8a6b45'; g.font = 'bold 22px serif'; g.fillText('一尾入魂 SABAKI', 790, 110);
+  g.fillStyle = SKIN; g.font = 'bold 84px serif'; g.fillText(G.result.rank, 790, 220);
+  g.fillStyle = '#2b2420'; g.font = 'bold 26px serif';
+  [['鱗取り', `${Math.round(G.score.scale * 100)}%`], ['頭落とし', `${Math.round(G.score.head * 100)}点`], ['三枚おろし', `${Math.round(G.score.fillet * 100)}点`], ['歩留まり', `${G.result.yieldPct}%`], ['刺身', `${Math.round(G.score.sashimi * 100)}点`]]
+    .forEach(([k, v], i) => { g.fillText(k, 790, 290 + i * 50); g.textAlign = 'right'; g.fillText(v, 1130, 290 + i * 50); g.textAlign = 'left'; });
+  const blob = await new Promise((r) => c.toBlob(r, 'image/png')), f = new File([blob], 'sabaki.png', { type: 'image/png' });
+  if (navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f], text: `${FISH.ja}をさばいた。鑑定は「${G.result.rank}」 #一尾入魂` }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sabaki.png'; a.click();
+};
+
+// ---------------------------------------------------------------- drawing
+let shake = 0;
+const board = mk(1024, 1024);
+{ const g = board.getContext('2d'); g.fillStyle = '#e9e4da'; g.fillRect(0, 0, 1024, 1024);   // a white cutting board with knife scratches and a damp sheen
+  for (let i = 0; i < 2600; i++) { g.strokeStyle = `rgba(120,105,85,${Math.random() * .06})`; g.lineWidth = .6; const X = Math.random() * 1024, Y = Math.random() * 1024, a = Math.random() * .6 - .3 + (Math.random() < .5 ? 0 : 1.57), l = 8 + Math.random() * 60; g.beginPath(); g.moveTo(X, Y); g.lineTo(X + Math.cos(a) * l, Y + Math.sin(a) * l); g.stroke(); }
+  for (let i = 0; i < 40; i++) { const gr = g.createRadialGradient(Math.random() * 1024, Math.random() * 1024, 0, 512, 512, 900); gr.addColorStop(0, 'rgba(255,255,255,.05)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); } }
+function drawBoard() {
+  x.save(); x.setTransform(DPR, 0, 0, DPR, 0, 0);
+  x.fillStyle = '#3a2c20'; x.fillRect(0, 0, VW, VH);
+  const port = VH > VW, bw = port ? VW * .96 : VW * .94, bh = port ? VH * .78 : VH * .82, bx = (VW - bw) / 2, by = (VH - bh) / 2 + 14;
+  x.shadowColor = '#000a'; x.shadowBlur = 30; x.shadowOffsetY = 10; x.fillStyle = '#e9e4da'; x.fillRect(bx, by, bw, bh); x.shadowColor = 'transparent';
+  x.save(); x.beginPath(); x.rect(bx, by, bw, bh); x.clip(); x.globalAlpha = .9; x.drawImage(board, bx, by, Math.max(bw, bh), Math.max(bw, bh)); x.restore();
+  const gr = x.createLinearGradient(bx, by, bx + bw, by + bh); gr.addColorStop(0, 'rgba(255,255,255,.18)'); gr.addColorStop(.5, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(0,0,0,.08)'); x.fillStyle = gr; x.fillRect(bx, by, bw, bh);
+  x.restore();
+}
+function shadowUnder(path) { x.save(); x.shadowColor = 'rgba(40,20,10,.45)'; x.shadowBlur = 24 * SC * DPR; x.shadowOffsetY = 8 * SC * DPR; x.fillStyle = '#000'; path(); x.fill(); x.restore(); }
+// the fish as it is now: wet skin, the scales that are left on top
+function fishImage(g) { g.drawImage(skin, 0, 0); const t = mk.tmp || (mk.tmp = mk(FW, FH)), tg = t.getContext('2d'); tg.clearRect(0, 0, FW, FH); tg.drawImage(scaled, 0, 0); tg.globalCompositeOperation = 'destination-in'; tg.drawImage(smask, 0, 0); tg.globalCompositeOperation = 'source-over'; g.drawImage(t, 0, 0); }
+const fishNow = mk(FW, FH);
+function halfPlane(g, right) { const a = cutLine.a, b = cutLine.b, nx = b.y - a.y, ny = -(b.x - a.x), l = Math.hypot(nx, ny), s = (right ? 1 : -1) * 4000 / l; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.lineTo(b.x + nx * s, b.y + ny * s); g.lineTo(a.x + nx * s, a.y + ny * s); g.closePath(); }
+// the cut face of the body at the head cut: a band of flesh with the skin as a red rim and the spine in it
+function cutFace(dir) {
+  const mx = cutX(spineY(D.cut[0][0])) + 4, ya = top(mx), yb = bot(mx);
+  x.save(); x.lineCap = 'round';
+  for (let y = ya + 2; y < yb - 2; y += 2) { const cx = cutX(y), u = (y - ya) / (yb - ya); x.fillStyle = Math.abs(y - spineY(cx + 20)) < 6 ? '#e8e0d0' : u < .06 || u > .94 ? '#b8312a' : `hsl(8,${55 - 25 * Math.sin(u * 3.1)}%,${86 - 6 * Math.sin(u * 3.1)}%)`; x.fillRect(cx - (dir > 0 ? 0 : 7), y, 7, 2.2); }
+  x.restore();
+}
+function render(now) {
+  requestAnimationFrame(render);
+  if (G.st === 4) return drawPlate(now);
+  const dt = Math.min(.05, (now - (render.t || now)) / 1000); render.t = now;
+  drawBoard();
+  x.save(); x.setTransform(M); if (shake > 0) { x.translate((Math.random() - .5) * 8 * shake, (Math.random() - .5) * 8 * shake); shake = Math.max(0, shake - dt * 4); }
+  const fg = fishNow.getContext('2d'); fg.clearRect(0, 0, FW, FH); fishImage(fg);
+
+  if (G.st <= 0) { shadowUnder(() => bodyPath(x)); x.drawImage(fishNow, 0, 0); }
+  if (G.st === 1 || (G.st === 2 && !G.fillets && !G.lift)) {
+    if (!G.cut) { shadowUnder(() => bodyPath(x)); x.drawImage(fishNow, 0, 0); }
+    else {
+      const t = clamp((now - G.cut.t0 - 260) / 550, 0, 1), k = back(Math.min(1, t * 1.1));
+      x.save(); halfPlane(x, true); x.clip(); shadowUnder(() => bodyPath(x)); x.drawImage(fishNow, 0, 0); x.restore(); cutFace(1);
+      // the head drops away from the cut (once the knife is through)
+      x.save(); x.translate(-110 * k, 26 * k); x.rotate(-.12 * k); x.translate(0, 0); halfPlane(x, false); x.clip(); x.drawImage(fishNow, 0, 0); x.restore();
+      { const e = now - G.cut.t0; if (e < 700) {
+        const mx = cutX(spineY(D.cut[0][0])), my = (top(mx) + bot(mx)) / 2, ang = Math.atan2(cutLine.b.y - cutLine.a.y, cutLine.b.x - cutLine.a.x);
+        const p = clamp(e / 260, 0, 1), lift = e > 380 ? (e - 380) / 320 : 0;
+        drawKnife(mx + Math.cos(ang) * 40 * (1 - p), my + Math.sin(ang) * 40 * (1 - p), ang, 'deba', lerp(.15, .8, ease(p)), 1 - lift); } }
+    }
+  }
+  if (G.st === 2 && (G.fillets || G.lift)) drawFillet(now);
+  if (G.st === 2 && !G.fillets && !G.lift) { /* drawn above */ }
+  if (G.st === 2 && G.path.length > 1 && !G.lift) {   // the slit the knife leaves, and the knife
+    x.save(); applyGroup(G.fillets ? 1 : 0);
+    x.lineCap = 'round'; x.strokeStyle = '#e8a598'; x.lineWidth = 7; x.beginPath(); G.path.forEach((q, i) => (i ? x.lineTo(q.x, q.y) : x.moveTo(q.x, q.y))); x.stroke();
+    x.strokeStyle = '#5a1712'; x.lineWidth = 2; x.beginPath(); G.path.forEach((q, i) => (i ? x.lineTo(q.x, q.y) : x.moveTo(q.x, q.y))); x.stroke();
+    const q = G.path[G.path.length - 1], q0 = G.path[Math.max(0, G.path.length - 4)], saw = Math.sin(now / 45) * .07;
+    drawKnife(q.x, q.y, Math.atan2(q.y - q0.y, q.x - q0.x) || 0, 'deba', .45 + saw); x.restore();
+  }
+  if (G.st === 3 || G.st === 4) drawSashimi(now);
+  if (G.drawLine) { const { a, b } = G.drawLine; x.strokeStyle = 'rgba(255,255,255,.85)'; x.setLineDash([14, 10]); x.lineWidth = 4; x.beginPath(); x.moveTo(a.x, a.y); x.lineTo(b.x, b.y); x.stroke(); x.setLineDash([]); drawKnife(b.x, b.y, Math.atan2(b.y - a.y, b.x - a.x), G.st === 3 ? 'yanagi' : 'deba', .9); }
+  for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; p.life -= dt; if (p.life <= 0) { P.splice(i, 1); continue; } p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 900 * dt; p.r += p.vr * dt;
+    x.save(); x.translate(p.x, p.y); x.rotate(p.r); x.globalAlpha = Math.min(1, p.life * 2); x.fillStyle = p.c; x.beginPath(); x.ellipse(0, 0, p.s, p.s * .6 * Math.abs(Math.cos(p.r * 2)) + .5, 0, 0, 6.28); x.fill(); x.restore(); }
+  x.restore();
+}
+// an indigo glazed plate on a dark wooden table; tsuma, shiso, slices and wasabi as they are placed
+const TSUMA = []; { let r = 3; const rnd = () => ((r = (r * 16807) % 2147483647) / 2147483647); for (let i = 0; i < 260; i++) TSUMA.push([rnd(), rnd(), rnd(), rnd()]); }
+function drawPlate(now) {
+  x.setTransform(DPR, 0, 0, DPR, 0, 0);
+  drawBoard(); x.setTransform(DPR, 0, 0, DPR, 0, 0);   // the plate sits on the cutting board
+  const { cx, cy, R } = plateGeom();
+  x.save(); x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = R * .12; x.shadowOffsetY = R * .05; x.fillStyle = '#1a2436'; x.beginPath(); x.arc(cx, cy, R, 0, 6.29); x.fill(); x.restore();
+  let g = x.createRadialGradient(cx - R * .2, cy - R * .25, R * .1, cx, cy, R); g.addColorStop(0, '#3f5578'); g.addColorStop(.7, '#24334f'); g.addColorStop(.93, '#1b263b'); g.addColorStop(1, '#55678a');
+  x.fillStyle = g; x.beginPath(); x.arc(cx, cy, R, 0, 6.29); x.fill();
+  x.strokeStyle = 'rgba(255,255,255,.12)'; x.lineWidth = R * .04; x.beginPath(); x.arc(cx, cy, R * .86, 0, 6.29); x.stroke();
+  x.fillStyle = 'rgba(255,255,255,.08)'; x.beginPath(); x.ellipse(cx - R * .35, cy - R * .45, R * .35, R * .12, -.6, 0, 6.29); x.fill();
+  const pop = (t0, d = 260) => back(clamp((now - t0) / d, 0, 1));
+  if (PL.tsuma) { const T = PL.tsuma, k = pop(T.t), rx = R * .3 * T.len * k, ry = R * .17 * k;
+    x.save(); x.translate(T.x, T.y); x.rotate(T.ang); x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = 10; x.fillStyle = 'rgba(240,240,232,.9)'; x.beginPath(); x.ellipse(0, 0, rx * .9, ry * .8, 0, 0, 6.29); x.fill(); x.shadowBlur = 0;
+    x.lineCap = 'round'; for (const [a, b, c, d] of TSUMA) { const ang = a * 6.28, rr = Math.sqrt(b), X = Math.cos(ang) * rx * rr, Y = Math.sin(ang) * ry * rr - (1 - rr) * ry * .5;
+      x.strokeStyle = `rgba(${235 + c * 20},${235 + c * 20},${228 + c * 20},.95)`; x.lineWidth = 1.1; x.beginPath(); x.moveTo(X, Y); x.quadraticCurveTo(X + (d - .5) * 14, Y - 8 * k, X + (c - .5) * 20, Y - 3); x.stroke(); } x.restore(); }
+  if (PL.shiso) { const k = pop(PL.shiso.t), L = R * .3 * clamp(PL.shiso.len, .7, 1.2) * k, a = PL.shiso.ang;
+    x.save(); x.translate(PL.shiso.x, PL.shiso.y); x.rotate(a); x.shadowColor = 'rgba(0,0,0,.4)'; x.shadowBlur = 8;
+    const lg = x.createLinearGradient(-L, 0, L, 0); lg.addColorStop(0, '#2e6b2a'); lg.addColorStop(.6, '#4f9a3c'); lg.addColorStop(1, '#3c7d32'); x.fillStyle = lg;
+    x.beginPath(); x.moveTo(-L, 0); for (let i = 0; i <= 20; i++) { const t = i / 20, w = Math.sin(t * Math.PI) * L * .55 * (1 + (i % 2) * .08); x.lineTo(-L + t * 2 * L, -w); } for (let i = 20; i >= 0; i--) { const t = i / 20, w = Math.sin(t * Math.PI) * L * .55 * (1 + (i % 2) * .08); x.lineTo(-L + t * 2 * L, w); } x.fill();
+    x.shadowBlur = 0; x.strokeStyle = 'rgba(200,240,170,.45)'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(-L, 0); x.lineTo(L, 0); for (let i = 1; i < 6; i++) { const X = -L + i * L / 3; x.moveTo(X, 0); x.lineTo(X + L * .25, -L * .3 * Math.sin(i / 6 * Math.PI)); x.moveTo(X, 0); x.lineTo(X + L * .25, L * .3 * Math.sin(i / 6 * Math.PI)); } x.stroke(); x.restore(); }
+  if (PL.place) { x.strokeStyle = 'rgba(255,255,255,.7)'; x.setLineDash([6, 6]); x.lineWidth = 2; x.beginPath(); x.moveTo(PL.place.a.x, PL.place.a.y); x.lineTo(PL.place.b.x, PL.place.b.y); x.stroke(); x.setLineDash([]); }
+  if (PL.phase === 2 && PL.arc.length > 1) { x.strokeStyle = 'rgba(255,255,255,.6)'; x.setLineDash([8, 8]); x.lineWidth = 3; x.beginPath(); PL.arc.forEach((q, i) => (i ? x.lineTo(q.x, q.y) : x.moveTo(q.x, q.y))); x.stroke(); x.setLineDash([]); }
+  const mean = SPR.reduce((a, q) => a + q.w, 0) / Math.max(1, SPR.length);
+  for (const q of PL.placed) { const k = clamp((now - q.t) / 260, 0, 1); if (k <= 0) continue; const sp = q.sp, len = R * .55, th = R * .2 * (sp.w / mean), e = back(k);
+    x.save(); x.translate(q.x, q.y - (1 - e) * 30); x.rotate(q.a + .55); x.globalAlpha = Math.min(1, k * 2);
+    x.shadowColor = 'rgba(0,0,0,.5)'; x.shadowBlur = 10; x.shadowOffsetX = 4; x.shadowOffsetY = 6;
+    if (FOOD_SLICE) { const ar = FOOD_SLICE.width / FOOD_SLICE.height, L2 = len * 1.05, W2 = Math.max(th * 1.6, L2 * ar * (sp.w / mean) * .9); x.drawImage(FOOD_SLICE, -W2 / 2, -L2 / 2, W2, L2); }
+    else x.drawImage(sp.c, -th / 2, -len / 2, th, len); x.restore(); }
+  if (PL.wasabi) { const k = pop(PL.wasabi.t), r = R * .09 * k; x.save(); x.shadowColor = 'rgba(0,0,0,.5)'; x.shadowBlur = 8;
+    const wg = x.createRadialGradient(PL.wasabi.x - r * .3, PL.wasabi.y - r * .4, 1, PL.wasabi.x, PL.wasabi.y, r); wg.addColorStop(0, '#c7e07a'); wg.addColorStop(1, '#7da23a');
+    x.fillStyle = wg; x.beginPath(); x.ellipse(PL.wasabi.x, PL.wasabi.y, r, r * .75, 0, 0, 6.29); x.fill(); x.shadowBlur = 0; x.fillStyle = 'rgba(80,110,30,.6)';
+    for (let i = 0; i < 18; i++) { const a = i * 2.4, rr = r * .7 * ((i * 37 % 10) / 10); x.fillRect(PL.wasabi.x + Math.cos(a) * rr, PL.wasabi.y + Math.sin(a) * rr * .7, 1.5, 1.5); } x.restore(); }
+}
+// A knife lying with its edge on the cut: (cx, cy) is where the edge touches, `ang` the direction of the blade
+// (towards the tip), `at` where along the edge it touches (0 tip .. 1 heel). Seen from above, slightly tilted so the
+// flat of the blade shows. deba: short, wide, heavy; yanagi: long and slim.
+const KN = { deba: { L: 250, W: 66, H: 150, tipK: .55 }, yanagi: { L: 430, W: 36, H: 170, tipK: .3 } };
+function drawKnife(cx, cy, ang, kind = 'deba', at = .5, alpha = 1) {
+  const k = KN[kind], L = k.L, W = k.W;
+  x.save(); x.globalAlpha = alpha; x.translate(cx, cy); x.rotate(ang); x.translate(-L * (1 - at), 0);   // local: x along the blade (tip at +L), edge at y = 0, spine at y = -W
+  // shadow on the board
+  x.save(); x.translate(10, 14); x.fillStyle = 'rgba(30,20,10,.22)'; x.filter = 'blur(6px)'; x.beginPath(); x.moveTo(-k.H - 16, -W * .55); x.lineTo(-k.H - 16, -W * .15); x.lineTo(L, 0); x.lineTo(L * (1 - k.tipK), -W); x.lineTo(0, -W); x.closePath(); x.fill(); x.restore();
+  // the blade: spine straight, the edge rising to the tip
+  const blade = () => { x.beginPath(); x.moveTo(0, -W); x.lineTo(L * (1 - k.tipK), -W); x.quadraticCurveTo(L * .97, -W * .9, L, -2); x.quadraticCurveTo(L * .6, 4, 0, 1); x.closePath(); };
+  blade(); const g = x.createLinearGradient(0, -W, 0, 2); g.addColorStop(0, '#6d757c'); g.addColorStop(.12, '#a7b0b7'); g.addColorStop(.55, '#d6dde2'); g.addColorStop(.62, '#f4f7f9'); g.addColorStop(.66, '#b8c1c8'); g.addColorStop(.9, '#e9eef1'); g.addColorStop(1, '#ffffff');
+  x.fillStyle = g; x.fill();
+  x.save(); blade(); x.clip();
+  const sh = x.createLinearGradient(0, 0, L, 0); sh.addColorStop(0, 'rgba(255,255,255,0)'); sh.addColorStop(.45, 'rgba(255,255,255,.35)'); sh.addColorStop(.55, 'rgba(255,255,255,0)'); x.fillStyle = sh; x.fillRect(0, -W, L, W + 4);   // a sweep of reflected light
+  x.strokeStyle = 'rgba(80,88,95,.5)'; x.lineWidth = 1.2; x.beginPath(); x.moveTo(4, -W * .36); x.quadraticCurveTo(L * .7, -W * .33, L * .96, -W * .12); x.stroke();   // shinogi: the bevel line
+  x.fillStyle = 'rgba(40,45,50,.55)'; x.font = `${W * .32}px serif`; x.fillText('一尾', L * .08, -W * .55);   // the maker's mark
+  x.restore();
+  x.strokeStyle = 'rgba(255,255,255,.9)'; x.lineWidth = 1.2; x.beginPath(); x.moveTo(2, 0.5); x.quadraticCurveTo(L * .6, 3.5, L - 2, -2); x.stroke();   // the polished edge
+  // handle: buffalo-horn ferrule and a honoki-wood handle, octagonal
+  const hy0 = -W * .78, hy1 = -W * .12;
+  const fg = x.createLinearGradient(0, hy0, 0, hy1); fg.addColorStop(0, '#2a2624'); fg.addColorStop(.4, '#5a534e'); fg.addColorStop(1, '#141210');
+  x.fillStyle = fg; x.beginPath(); x.roundRect(-22, hy0 - 2, 24, hy1 - hy0 + 4, 3); x.fill();
+  const hg = x.createLinearGradient(0, hy0, 0, hy1); hg.addColorStop(0, '#a9a27a'); hg.addColorStop(.35, '#d8d2a8'); hg.addColorStop(.5, '#c9c296'); hg.addColorStop(1, '#8c855e');
+  x.fillStyle = hg; x.beginPath(); x.roundRect(-k.H - 22, hy0, k.H, hy1 - hy0, 5); x.fill();
+  x.strokeStyle = 'rgba(110,100,60,.35)'; x.lineWidth = 1; for (let i = 1; i < 6; i++) { const y = lerp(hy0, hy1, i / 6) + Math.sin(i) * 2; x.beginPath(); x.moveTo(-k.H - 20, y); x.bezierCurveTo(-k.H * .6, y + 3, -k.H * .3, y - 3, -24, y + 1); x.stroke(); }
+  x.restore();
+}
+// The flesh ends at the tail's narrowest point (the tail fin is not meat).
+let PED = BX1; { let best = 1e9; for (let i = Math.round(BX0 + (BX1 - BX0) * .6); i < BX1 - 4; i++) { const h = bot(i) - top(i); if (top(i) >= 0 && h < best) { best = h; PED = i; } } }
+// Once the first side is off, the board shows three pieces side by side, so the group is scaled down around the middle.
+const L2 = .6, OFF = FH * .58, CXg = FW / 2, CYg = FH / 2;
+const groupK = (now) => (G.st !== 2 ? 0 : G.fillets ? 1 : G.lift ? ease(clamp((now - G.lift) / 1100, 0, 1)) : 0);
+const applyGroup = (k) => { const sc = lerp(1, L2, k); x.translate(CXg, CYg); x.scale(sc, sc); x.translate(-CXg, -CYg); };
+const toG = (q) => { const sc = G.fillets ? L2 : 1; return { x: CXg + (q.x - CXg) / sc, y: CYg + (q.y - CYg) / sc }; };
+const pieceClip = (g) => { halfPlane(g, true); g.clip(); bodyPath(g, BX0, PED); g.clip(); };
+// the skeleton: spine with its segments, the dark blood line along it, ribs; flesh left on the bone if the knife strayed
+function bones(meat) {
+  x.save(); x.lineCap = 'round'; const x0 = cutX(spineY(D.cut[0][0])) + 6, x1 = PED + 30;
+  x.shadowColor = 'rgba(60,30,20,.35)'; x.shadowBlur = 8;
+  x.strokeStyle = '#d9cfc2'; x.lineWidth = 3; x.globalAlpha = .95;
+  for (let X = x0 + 12; X < PED - 20; X += 13) { const y = spineY(X), h = bot(X) - top(X);
+    x.beginPath(); x.moveTo(X, y); x.quadraticCurveTo(X - 14, y - h * .25, X - 22, top(X) + h * .08); x.stroke();
+    x.beginPath(); x.moveTo(X, y); x.quadraticCurveTo(X - 16, y + h * .3, X - 26, bot(X) - h * .1); x.stroke(); }
+  x.shadowBlur = 0; x.globalAlpha = 1;
+  if (meat > 0) { x.strokeStyle = `rgba(236,170,160,${clamp(meat * 10, .25, .85)})`; x.lineWidth = 14 + meat * 420; x.beginPath(); for (let X = x0; X < PED; X += 8) x.lineTo(X, spineY(X)); x.stroke(); }
+  x.strokeStyle = '#7d2626'; x.lineWidth = 9; x.beginPath(); for (let X = x0; X < PED; X += 8) x.lineTo(X, spineY(X) + 5); x.stroke();
+  x.strokeStyle = '#e8e0d3'; x.lineWidth = 12; x.beginPath(); for (let X = x0; X < x1; X += 8) x.lineTo(X, spineY(Math.min(X, PED))); x.stroke();
+  x.strokeStyle = '#b9ae9f'; x.lineWidth = 1.5; for (let X = x0 + 8; X < x1; X += 11) { const y = spineY(Math.min(X, PED)); x.beginPath(); x.moveTo(X, y - 6); x.lineTo(X, y + 6); x.stroke(); }
+  x.restore();
+}
+// what is left in the middle: flesh on the bone (before the second stroke) or just the skeleton
+function bonePiece(flesh, meat) {
+  if (flesh) { x.save(); shadowUnder(() => { pieceClip(x); bodyPath(x, BX0, PED); }); x.restore(); x.save(); pieceClip(x); x.drawImage(FLESH, 0, 0); x.restore(); }
+  if (flesh) { x.save(); x.strokeStyle = '#b8302a'; x.lineWidth = 7; pieceClip(x); bodyPath(x, BX0, PED); x.stroke(); x.restore(); }
+  bones(meat);
+}
+// a fillet at vertical offset `off`; `flip` 0 = skin up (still on the fish) .. 1 = turned over, flesh up
+function piece(off, flip) {
+  x.save(); x.translate(0, off); const c = Math.cos(flip * Math.PI), cy = (top(FW / 2) + bot(FW / 2)) / 2;
+  x.translate(0, cy); x.scale(1, Math.abs(c) < .02 ? .02 : c); x.translate(0, -cy);
+  x.save(); shadowUnder(() => { pieceClip(x); bodyPath(x, BX0, PED); }); x.restore();
+  pieceClip(x); if (flip < .5) x.drawImage(fishNow, 0, 0); else x.drawImage(FLESH, 0, 0);
+  x.strokeStyle = '#b8302a'; x.lineWidth = 7; bodyPath(x, BX0, PED); x.stroke(); x.restore();
+}
+function drawFillet(now) {
+  const k = G.lift ? ease(clamp((now - G.lift) / 1100, 0, 1)) : 1;
+  x.save(); applyGroup(groupK(now));
+  if (G.fillets === 0) { bonePiece(true, 0); piece(-OFF * k, k); }
+  else if (G.fillets === 1 && !G.lift) { piece(-OFF, 1); bonePiece(true, 0); }
+  else if (G.fillets === 1) { piece(-OFF, 1); bonePiece(false, G.err[0]); piece(OFF * k, 1); }
+  else { piece(-OFF, 1); piece(OFF, 1); bonePiece(false, (G.err[0] + G.err[1]) / 2); }
+  x.restore();
+}
+// the fillet laid across the board for slicing; slices tip over as they are cut
+function drawSashimi(now) {
+  drawSashimiPieces(now);
+  if (G.pull) { const e = (now - G.pull.t) / 260; if (e < 1.4) { const X = G.pull.x, y0 = top(X) - 20, y1 = bot(X) + 20, p = ease(clamp(e, 0, 1));
+    drawKnife(X, lerp(y0, y1, p), Math.PI / 2, 'yanagi', lerp(.95, .1, p), clamp(1.4 - e, 0, 1)); } }   // one long pull, heel to tip
+}
+function drawSashimiPieces(now) {
+  if (!FILX1) { FILX0 = cutX(spineY(D.cut[0][0])) + 4; FILX1 = PED - 6; }
+  const xs = [FILX0, ...G.cuts.map((c) => c.x), FILX1];
+  const plated = G.st === 4;
+  for (let i = 0; i < xs.length - 1; i++) {
+    const a = xs[i], b = xs[i + 1], c = G.cuts.find((q) => q.x === a), age = c ? clamp((now - c.t) / 300, 0, 1) : 1, k = i ? back(age) : 0;
+    x.save(); x.translate(i * 10 * k, 0); x.translate(a, (top(a) + bot(a)) / 2); x.transform(1, 0, -.18 * k, 1, 0, 0); x.translate(-a, -(top(a) + bot(a)) / 2);
+    if (plated) { const f = ease(clamp((now - plate.t) / 900, 0, 1)); x.translate(-i * 12 * f, 0); }
+    x.beginPath(); x.rect(a, 0, b - a, FH); x.clip();
+    shadowUnder(() => bodyPath(x, FILX0, FILX1)); bodyPath(x, FILX0, FILX1); x.clip(); x.drawImage(FLESH, 0, 0);
+    // skin on top of the slice: the red of the kinmedai, wet
+    x.strokeStyle = SKIN; x.lineWidth = 14; x.beginPath(); for (let X = a; X <= b; X += 4) x.lineTo(X, top(X) + 5); x.stroke();
+    x.strokeStyle = 'rgba(255,255,255,.35)'; x.lineWidth = 2; x.beginPath(); for (let X = a; X <= b; X += 4) x.lineTo(X, top(X) + 3); x.stroke();
+    x.fillStyle = 'rgba(0,0,0,.12)'; x.fillRect(a, 0, 3, FH);
+    x.restore();
+  }
+}
+requestAnimationFrame(render);
+
+const begin = () => { audio(); $('title').style.display = 'none'; stage(0); };
+if (QS.has('go')) { $('title').style.display = 'none'; stage(0); cv.addEventListener('pointerdown', audio, { once: true }); }
+window.__g = { toS: (q) => { const r = new DOMPoint(q.x, q.y).matrixTransform(M); return { x: r.x / DPR, y: r.y / DPR }; }, G, stage, toF, D, coverage, sm, headCut, filletStroke, sliceCut, plate: () => plate() };   // for testing
+</script>
+</body>
+</html>

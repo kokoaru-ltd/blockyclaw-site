@@ -1,0 +1,363 @@
+<!doctype html><meta charset=utf-8><title>VOID SHIFT</title>
+<style>*{margin:0}body{background:#000;overflow:hidden;font:15px monospace;color:#fff}canvas{position:fixed;width:100%;height:100%}#h{position:fixed;left:18px;bottom:14px;text-shadow:0 0 4px #000}#t{position:fixed;right:18px;top:14px;text-align:right;text-shadow:0 0 4px #000;white-space:pre}#t b{color:#f33}#x{position:fixed;left:50%;top:50%;width:3px;height:3px;margin:-1.5px;border-radius:2px;background:#fffc;box-shadow:0 0 2px #000}#m{position:fixed;inset:0;display:grid;place-items:center;text-align:center;white-space:pre;font-size:20px;text-shadow:0 0 8px #000}</style>
+<canvas id=c></canvas><div id=x></div><div id=t></div><div id=h></div><div id=m>VOID SHIFT
+
+CLICK TO START
+WASD move · Shift run · Space jump · C crouch
+mouse aim · click shoot · R reload · 1 2 3 or wheel: weapon
+players on the same server fight each other · alone, you fight bots</div>
+<script>
+(async()=>{
+const C=document.getElementById('c'),H=document.getElementById('h'),M=document.getElementById('m'),T=document.getElementById('t'),X=document.getElementById('x');
+if(!navigator.gpu){M.textContent='This game needs WebGPU (Chrome / Edge)';return}
+const ad=await navigator.gpu.requestAdapter(),dv=await ad.requestDevice(),cx=C.getContext('webgpu'),fm=navigator.gpu.getPreferredCanvasFormat();
+// ---- the whole world is this shader: a distance function, procedural concrete, lamps, a torch and a body-camera lens
+const sh=dv.createShaderModule({code:`
+struct U{r:vec4f,p:vec4f,a:vec4f,e:array<vec4f,8>,ta:vec4f,tb:vec4f,w:vec4f,e2:array<vec4f,8>}
+@group(0)@binding(0)var<uniform>u:U;
+@vertex fn v(@builtin(vertex_index)i:u32)->@builtin(position)vec4f{return vec4f(f32(i&1u)*4.-1.,f32(i>>1u)*4.-1.,0.,1.);}
+fn h2(p:vec2f)->f32{return fract(sin(dot(p,vec2f(127.1,311.7)))*43758.5);}
+fn h3(p:vec3f)->f32{return fract(sin(dot(p,vec3f(127.1,311.7,74.7)))*43758.5);}
+fn vn(p:vec3f)->f32{let i=floor(p);var f=fract(p);f=f*f*(3.-2.*f);
+  return mix(mix(mix(h3(i),h3(i+vec3f(1,0,0)),f.x),mix(h3(i+vec3f(0,1,0)),h3(i+vec3f(1,1,0)),f.x),f.y),
+             mix(mix(h3(i+vec3f(0,0,1)),h3(i+vec3f(1,0,1)),f.x),mix(h3(i+vec3f(0,1,1)),h3(i+vec3f(1,1,1)),f.x),f.y),f.z);}
+fn fb(p:vec3f)->f32{var a=.5;var s=0.;var q=p;for(var i=0;i<4;i++){s+=a*vn(q);q=q*2.03+7.;a*=.5;}return s;}
+fn bx(p:vec3f,b:vec3f)->f32{let q=abs(p)-b;return length(max(q,vec3f(0.)))+min(max(q.x,max(q.y,q.z)),0.);}
+fn cap(p:vec3f,a:vec3f,b:vec3f,r:f32)->f32{let pa=p-a;let ba=b-a;return length(pa-ba*clamp(dot(pa,ba)/dot(ba,ba),0.,1.))-r;}
+// static world: floor, ceiling, outer walls, pillars, ceiling beams, lamp tubes
+// what stands in an 8 m bay is decided by k = (3x+5z) mod 7 of the bay: +x side car (k<3) or container (k=4),
+// -x side a concrete barrier (k odd) or a stack of crates (k even). bays crossed by a partition wall keep the +x side free
+fn bk(ci:vec2f)->f32{let k=floor(fract((ci.x*3.+ci.y*5.)/7.)*7.+.5);return k-7.*step(6.5,k);}
+fn obs(p:vec3f)->f32{
+  let ci=floor(p.xz/8.);let c=(fract(p.xz/8.)-.5)*8.;let k=bk(ci);
+  var d=4.6-max(abs(c.x),abs(c.y));
+  if(fract((ci.y+2.)/3.)>.2){
+    if(k<2.5){
+      let q=vec3f(c.x-2.4,p.y,c.y);
+      let tp=1.+max(q.y-.8,0.)*.9;var b=bx(q-vec3f(0.,.5,0.),vec3f(.66,.17,1.86))-.22;
+      let cb=bx(vec3f(q.x*(1.+max(q.y-.8,0.)*.5),q.y-.98,(q.z+.15)*tp),vec3f(.6,.2,1.15))-.13;let hh=max(.13-abs(b-cb),0.);b=min(b,cb)-hh*hh*1.9;
+      let w=vec3f(abs(q.x)-.8,q.y-.3,abs(q.z)-1.3);
+      b=min(b,max(length(w.yz)-.3,abs(w.x)-.1));
+      d=min(d,b);}
+    if(k>3.5&&k<4.5){d=min(d,bx(vec3f(c.x-2.3,p.y-1.2,c.y),vec3f(.96,1.17,2.86))-.03);}}
+  if(fract(k*.5)>.25){let q=vec3f(c.x+1.6,p.y,c.y+2.4);
+    d=min(d,bx(q-vec3f(0.,.4,0.),vec3f(1.3,.4,.1+.2*clamp(1.-q.y*2.,0.,1.)))*.7);
+  }else{let q=vec3f(c.x+2.3,p.y,c.y-1.8);
+    d=min(d,min(bx(q-vec3f(0.,.5,0.),vec3f(.49)),min(bx(q-vec3f(.9,.35,.2),vec3f(.34)),bx(q-vec3f(.1,1.3,0.),vec3f(.29))))-.01);}
+  return d;}
+// the map is 24 m blocks between the partition walls. one block in three is an open yard under the night sky:
+// no roof, pillars or lamps, lit by the moon
+const MOON=vec3f(.42,.84,.34);
+fn yd(x:vec2f)->f32{let b=floor((x+12.)/24.);return step(abs(fract((b.x+2.*b.y)/3.)-.333),.1);}
+fn wm(p:vec3f)->f32{
+  var d=min(p.y,59.-max(abs(p.x),abs(p.z)));
+  let wl=(fract(p.xz/24.)-.5)*24.;let wo=(fract(p.zx/24.+.5)-.5)*24.;
+  d=min(d,max(min(max(abs(wl.x)-.15,min(3.-abs(wo.x),2.45-p.y)),max(abs(wl.y)-.15,min(3.-abs(wo.y),2.45-p.y))),p.y-3.6));
+  d=min(d,obs(p));
+  d=min(d,min(bx(vec3f(abs(wl.x)-.2,p.y-2.75,wo.x),vec3f(.03,.11,.38)),bx(vec3f(wo.y,p.y-2.75,abs(wl.y)-.2),vec3f(.38,.11,.03))));
+  if(yd(p.xz)<.5){
+    let pc=(fract(p.xz/8.)-.5)*8.;d=min(d,min(length(vec2f(pc.x-1.2,p.y-3.)),length(vec2f(pc.x-1.45,p.y-2.97))-.03)-.05);
+    d=min(d,abs(p.y-3.4)-.2);
+    let c=(fract(p.xz/8.)-.5)*8.;
+    let q=abs(c)-.45;d=min(d,max(length(max(q,vec2f(0.)))+min(max(q.x,q.y),0.)-.05,p.y-3.4));
+    let b=abs(vec2f(c.y,p.y-3.05))-vec2f(.3,.15);d=min(d,max(b.x,b.y));
+    let l=(fract(p.xz/8.+.5)-.5)*8.;
+    d=min(d,bx(vec3f(l.x,p.y-3.13,l.y),vec3f(.6,.03,.05)));
+  }else{d=min(d,12.3-max(abs(wl.x),abs(wl.y)));}
+  return d;}
+// other players: helmet, torso, legs, arms holding a rifle (e.xyz feet, e.w yaw)
+fn em(p:vec3f)->f32{var d=1e3;for(var i=0;i<8;i++){let e=u.e[i];if(e.y>-50.){let w=p-e.xyz;let r=length(w-vec3f(0.,.9,0.));
+  if(r>1.5){d=min(d,r-1.2);}else{let sy=sin(e.w);let cy=cos(e.w);let q=vec3f(w.x*cy+w.z*sy,w.y,w.x*sy-w.z*cy);let m=vec3f(abs(q.x),q.y,q.z);
+    var s=length((q-vec3f(0.,1.6,.02))*vec3f(1.,.9,.9))-.125;
+    s=min(s,bx(q-vec3f(0.,1.18,0.),vec3f(.16,.24,.08))-.07);
+    let mv=u.e2[i].y;let lw=sin(u.e2[i].x)*sign(q.x)*mv;   // legs swing opposite to each other, the lifted foot bends the knee
+    let kn=vec3f(.11,.47,lw*.22+.07*mv);let ft=vec3f(.12,.08+max(-lw,0.)*.13,lw*.4-.04*mv);
+    s=min(s,min(cap(m,vec3f(.1,.85,0.),kn,.085),cap(m,kn,ft,.075)));
+    s=min(s,cap(m,vec3f(.26,1.4,0.),vec3f(.2,1.18,.18),.06));
+    s=min(s,cap(m,vec3f(.2,1.18,.18),vec3f(.05,1.3,.42),.05));
+    s=min(s,bx(q-vec3f(.04,1.33,.5),vec3f(.018,.03,.34)));
+    s=min(s,bx(q-vec3f(.04,1.24,.38),vec3f(.014,.07,.025)));
+    d=min(d,s);}}}return d;}
+fn mp(p:vec3f)->f32{return min(wm(p),em(p));}
+fn nr(p:vec3f)->vec3f{let e=vec2f(.002,0.);return normalize(vec3f(mp(p+e.xyy)-mp(p-e.xyy),mp(p+e.yxy)-mp(p-e.yxy),mp(p+e.yyx)-mp(p-e.yyx)));}
+fn mar(ro:vec3f,rd:vec3f,n:i32,mx:f32)->f32{var t=0.;for(var i=0;i<n;i++){let d=mp(ro+rd*t);if(d<.001+.001*t){return t;}t+=d;if(t>mx){break;}}return -1.;}
+fn sha(o:vec3f,d:vec3f,mx:f32)->f32{var t=.06;var r=1.;for(var i=0;i<28;i++){let h=mp(o+d*t);r=min(r,10.*h/t);t+=clamp(h,.03,.6);if(h<.002||t>mx){break;}}return clamp(r,0.,1.);}
+fn lon(k:vec2f)->f32{var o=step(.3,h2(k))*(1.-yd(k*8.));if(h2(k+3.7)>.75){o*=step(.3,h2(vec2f(floor(u.r.z*13.),k.x+k.y)));}return o;}
+fn wet(p:vec3f)->f32{return smoothstep(.5,.6,fb(vec3f(p.xz*.4,3.)));}
+fn fw()->vec3f{return vec3f(sin(u.a.x)*cos(u.a.y),sin(u.a.y),-cos(u.a.x)*cos(u.a.y));}
+fn shade(p:vec3f,n:vec3f,rd:vec3f)->vec3f{
+  let LC=vec3f(.85,1.,.82);
+  let l=(fract(p.xz/8.+.5)-.5)*8.;
+  if(abs(l.x)<.63&&abs(l.y)<.08&&p.y>3.06){return LC*(lon(floor(p.xz/8.+.5))*7.+.02);}
+  let wl=(fract(p.xz/24.)-.5)*24.;let wo=(fract(p.zx/24.+.5)-.5)*24.;
+  if(p.y>2.63&&p.y<2.87&&((abs(abs(wl.x)-.2)<.05&&abs(wo.x)<.39)||(abs(abs(wl.y)-.2)<.05&&abs(wo.y)<.39))){
+    let sx=mix(wo.x,wo.y,step(abs(abs(wl.y)-.2),.05));return vec3f(.08,1.,.3)*(.6+1.2*step(abs(sx),.3)*step(.25,fract(sx*5.+.1)));}
+  let isE=em(p)<.02;
+  let nz=fb(p*1.3);
+  var alb=vec3f(.42,.41,.39)*(.5+.7*nz)*(.85+.3*vn(p*26.));
+  var sw=.04;var sp=16.;
+  let c=(fract(p.xz/8.)-.5)*8.;
+  if(n.y>.5){
+    alb=vec3f(.15,.15,.16)*(.5+nz)*(.8+.4*vn(p*40.));
+    let lx=abs(fract(p.x/2.667)-.5)*2.667;
+    alb=mix(alb,vec3f(.5,.5,.46),step(lx,.06)*step(1.3,abs(c.y))*smoothstep(.35,.6,nz+.15));
+    let w=wet(p);alb*=mix(1.,.45,w);sw=mix(.06,.9,w);sp=mix(16.,200.,w);
+  }else if(n.y>-.5){
+    let s=vn(vec3f(p.x*3.,p.y*.35,p.z*3.));
+    alb*=mix(1.,.5,smoothstep(.55,.8,s)*smoothstep(3.2,.8,p.y));
+    alb*=mix(.55,1.,smoothstep(0.,.5,p.y));
+    if(max(abs(c.x),abs(c.y))<.56&&p.y<1.1){
+      alb=mix(vec3f(.7,.55,.06),vec3f(.04),step(.5,fract((p.y+c.x+c.y)*2.)))*(.35+nz)*smoothstep(.3,.5,nz+vn(p*9.)*.3);
+      alb=max(alb,vec3f(.05));}
+  }else{alb*=.6;}
+  if(p.y>2.85&&p.y<3.09&&abs(c.x-1.33)<.26&&abs(c.y)>.33&&n.y>-.95&&yd(p.xz)<.5){alb=mix(vec3f(.22,.07,.04),vec3f(.3,.3,.32),step(1.33,c.x))*(.5+nz);sw=.4;sp=30.;}
+  if(isE){let cm=fb(p*5.);alb=mix(vec3f(.1,.11,.06),vec3f(.045,.04,.03),smoothstep(.45,.55,cm))*(.7+.6*vn(p*60.));sw=.03;sp=8.;}
+  else if(obs(p)<.01){
+    let ci=floor(p.xz/8.);let k=bk(ci);let hh=h2(ci);
+    if(c.x>0.){
+      if(k<2.5){let q=vec3f(c.x-2.4,p.y,c.y);
+        alb=mix(mix(vec3f(.05,.07,.12),vec3f(.3,.3,.31),step(.4,hh)),vec3f(.13,.025,.025),step(.8,hh))*(.6+.6*nz);sw=.6;sp=90.;
+        if(q.y>.86&&q.y<1.3&&abs(q.z+.15)<1.02){alb=vec3f(.012);sw=1.;sp=200.;}
+        if(q.y<.62&&abs(abs(q.z)-1.3)<.32&&abs(q.x)>.68){alb=vec3f(.02);sw=.05;sp=8.;}
+        alb=mix(alb,vec3f(.18,.17,.16)*nz,smoothstep(.5,.9,vn(p*3.)*n.y+.35));
+      }else{
+        alb=mix(vec3f(.07,.15,.2),vec3f(.3,.11,.05),step(.5,hh))*(.5+.8*nz)*(.72+.28*sin(p.z*42.));sw=.12;sp=20.;
+        alb=mix(alb,vec3f(.2,.09,.04)*nz,smoothstep(.5,.72,vn(p*4.)));}
+    }else if(fract(k*.5)<.25){
+      alb=vec3f(.34,.24,.13)*(.4+.9*nz)*(.55+.45*smoothstep(.02,.05,abs(fract(p.y*5.)-.5)))*(.8+.4*vn(p*vec3f(4.,60.,60.)));sw=.02;}
+    else{alb*=mix(vec3f(1.),vec3f(1.,.35,.1),step(.55,p.y)*step(p.y,.68)*smoothstep(.3,.5,nz+.1));}}
+  var col=alb*vec3f(.01,.012,.014);
+  let k0=floor(p.xz/8.+.5);
+  for(var a=0;a<2;a++){for(var b=0;b<2;b++){let k=floor(p.xz/8.)+vec2f(f32(a),f32(b));
+    let o=lon(k);if(o>0.){
+      let L=vec3f(k.x*8.,3.05,k.y*8.)-p;let d2=dot(L,L);let ld=L/sqrt(d2);
+      var s=1.;if(k.x==k0.x&&k.y==k0.y){s=sha(p+n*.02,ld,sqrt(d2)-.25);}
+      col+=LC*o*s*7./(1.+d2)*(alb*max(dot(n,ld),0.)+sw*pow(max(dot(reflect(rd,n),ld),0.),sp));}}}
+  if(yd(p.xz)>.5){
+    col+=vec3f(.3,.4,.6)*.9*sha(p+n*.02,MOON,40.)*(alb*max(dot(n,MOON),0.)+sw*pow(max(dot(reflect(rd,n),MOON),0.),sp))+alb*vec3f(.012,.018,.03)*(.6+.4*n.y);}
+  // torch on the chest, and the muzzle flash
+  let L=u.p.xyz-p;let d2=dot(L,L);let ld=L/sqrt(d2);
+  let cone=smoothstep(.78,.95,dot(-ld,fw()));
+  col+=(vec3f(1.,.96,.88)*(cone*26.+.5)+vec3f(1.,.65,.25)*u.r.w*22.)/(1.+d2)*(alb*max(dot(n,ld),0.)+sw*pow(max(dot(reflect(rd,n),ld),0.),sp));
+  return col*clamp(mp(p+n*.15)/.15,.25,1.);}
+// weapon in two gloved hands, forearms in sleeves; camera space. u.w.x: 0 pistol, 1 rifle, 2 shotgun
+// returns distance, material (0 gun, 1 glove, 2 sleeve)
+fn gs(q0:vec3f)->vec2f{
+  let W=u.w.x;let lg=step(.5,W);
+  var q=q0-vec3f(.012+.055*lg,-.125+u.a.w*.012-u.tb.w*.22-.012*lg,.4-u.a.w*.03-.05*lg);
+  let a=-u.a.w*.22*(1.-.6*lg);let ca=cos(a);let sa=sin(a);q=vec3f(q.x,q.y*ca-q.z*sa,q.y*sa+q.z*ca);
+  var gun=1e3;
+  if(W<.5){
+    gun=bx(q-vec3f(0.,.012,0.),vec3f(.0105,.012,.085))-.002;
+    gun=min(gun,bx(q-vec3f(0.,-.009,.006),vec3f(.0095,.008,.074))-.002);
+    gun=min(gun,max(bx(q-vec3f(0.,.028,-.078),vec3f(.008,.004,.004)),-bx(q-vec3f(0.,.03,-.078),vec3f(.0028,.004,.006))));
+    gun=min(gun,bx(q-vec3f(0.,.028,.078),vec3f(.0015,.004,.003)));
+  }else if(W<1.5){
+    gun=bx(q-vec3f(0.,.008,.07),vec3f(.013,.022,.16))-.002;
+    gun=min(gun,cap(q,vec3f(0.,.014,.2),vec3f(0.,.014,.5),.007));
+    gun=min(gun,bx(q-vec3f(0.,.042,0.),vec3f(.004,.012,.05)));
+    gun=min(gun,bx(q-vec3f(0.,.04,.42),vec3f(.002,.014,.004)));
+    let mq=q-vec3f(0.,-.065,.075);gun=min(gun,bx(vec3f(mq.x,mq.y*.94-mq.z*.34,mq.y*.34+mq.z*.94),vec3f(.009,.05,.018))-.002);
+    gun=min(gun,bx(q-vec3f(0.,-.006,-.17),vec3f(.011,.022,.08))-.003);
+  }else{
+    gun=cap(q,vec3f(0.,.02,-.05),vec3f(0.,.02,.52),.011);
+    gun=min(gun,cap(q,vec3f(0.,-.004,.05),vec3f(0.,-.004,.42),.011));
+    gun=min(gun,bx(q-vec3f(0.,.008,-.02),vec3f(.014,.024,.08))-.002);
+    gun=min(gun,bx(q-vec3f(0.,-.008,.22),vec3f(.019,.017,.06))-.004);
+    gun=min(gun,bx(q-vec3f(0.,-.012,-.18),vec3f(.011,.022,.08))-.003);}
+  let gq=q-vec3f(0.,-.055,-.062);let gr=vec3f(gq.x,gq.y*.969-gq.z*.247,gq.y*.247+gq.z*.969);
+  gun=min(gun,bx(gr,vec3f(.0105,.046,.017))-.004);
+  gun=min(gun,max(abs(length(q.yz-vec2f(-.031,-.02))-.016)-.002,abs(q.x)-.004));
+  var hd=length((gr-vec3f(.014,.004,-.014))*vec3f(.85,.7,1.))-.033;
+  for(var i=0;i<4;i++){let y=.026-f32(i)*.021;
+    hd=min(hd,cap(gr,vec3f(-.03,y-.004,.02),vec3f(.03,y,.024),.0098));
+    hd=min(hd,cap(gr,vec3f(.03,y,.024),vec3f(.034,y+.003,-.006),.0098));}
+  hd=min(hd,cap(q,vec3f(.019,-.012,-.06),vec3f(.0165,-.005,-.012),.0085));
+  // left hand: on the grip for the pistol, under the barrel for long guns
+  let lp=mix(vec3f(-.022,-.062,-.058),vec3f(-.006,-.04,.22),lg);
+  hd=min(hd,length((q-lp)*vec3f(.8,.8,.75))-.032);
+  hd=min(hd,cap(q,lp+vec3f(-.012,.03,-.01),lp+vec3f(-.004,.045,.05),.0085));
+  let r0=vec3f(.032,-.07,-.095);let r1=vec3f(.2,-.26,-.5);let l0=lp+vec3f(-.012,-.016,-.03);let l1=vec3f(-.25-.06*lg,-.27,-.5);
+  let ar=min(cap(q,r0,r1,.038),cap(q,l0,l1,.038));
+  let cf=min(cap(q,mix(r0,r1,.15),r1,.045),cap(q,mix(l0,l1,.15),l1,.045));
+  let d=min(min(gun,hd),min(ar,cf));
+  return vec2f(d,step(min(hd,ar),gun)+step(cf,min(gun,min(hd,ar))));}
+@fragment fn f(@builtin(position)c:vec4f)->@location(0)vec4f{
+  let R=u.r.xy;var uv=(c.xy*2.-R)/min(R.y,R.x*.62);uv.y=-uv.y;
+  let cr=cos(u.p.w);let sr=sin(u.p.w);uv=vec2f(uv.x*cr-uv.y*sr,uv.x*sr+uv.y*cr);
+  let r2=dot(uv,uv);let ud=uv*(1.+.07*r2)*.78;            // wide body-camera lens
+  let sy=sin(u.a.x);let cy=cos(u.a.x);let sp=sin(u.a.y);let cp=cos(u.a.y);
+  let F=fw();let Rt=vec3f(cy,0.,sy);let Up=vec3f(-sy*sp,cp,cy*sp);
+  let ro=u.p.xyz;let rd=normalize(F+ud.x*Rt+ud.y*Up);
+  let fog=vec3f(.006,.008,.01);var col=fog;
+  var t=mar(ro,rd,150,110.);
+  if(t>0.){
+    let p=ro+rd*t;let n=nr(p);
+    col=shade(p,n,rd);
+    if(n.y>.9&&em(p)>.05){let w=wet(p);if(w>.01){
+      let rr=reflect(rd,normalize(n+vec3f(vn(p*9.+u.r.z*.2)-.5,0.,vn(p*9.+5.)-.5)*.02));let o=p+n*.02;let t2=mar(o,rr,48,30.);
+      if(t2>0.){let p2=o+rr*t2;col+=w*(.05+.95*pow(1.-max(dot(n,-rd),0.),5.))*shade(p2,nr(p2),rr)*exp(-t2*.05);}}}
+    col=mix(col,fog,1.-exp(-t*.035));
+  }else{t=110.;if(rd.y>.03){   // night sky over the yards: stars and the moon
+    let sd=rd.xz/rd.y;col=vec3f(.012,.017,.035)+vec3f(.8)*step(.9975,h2(floor(sd*90.)))*smoothstep(.05,.3,rd.y)+vec3f(.9,.95,1.)*smoothstep(.9988,.9993,dot(rd,MOON))*2.;}}
+  col+=vec3f(.9,.9,.8)*smoothstep(.75,.97,dot(rd,F))*.03*(1.-exp(-t*.2));   // dust in the torch beam
+  // the last bullet: a thin hot line from muzzle to impact, and a spark where it hit
+  if(u.ta.w>0.){let ab=u.tb.xyz-u.ta.xyz;let ao=ro-u.ta.xyz;let b=dot(rd,ab);let cc=dot(ab,ab);let d=dot(rd,ao);let e=dot(ab,ao);
+    let sg=clamp((e-b*d)/max(cc-b*b,1e-4),0.,1.);let tt=b*sg-d;
+    if(tt>0.&&tt<t+.1){let dq=ao+rd*tt-ab*sg;col+=vec3f(1.,.75,.35)*u.ta.w*.00025/(dot(dq,dq)+.00012*tt);}
+    let bo=u.tb.xyz-ro;let tp=dot(bo,rd);
+    if(tp>0.&&tp<t+.3){let dq=bo-rd*tp;col+=vec3f(1.,.8,.5)*u.ta.w*u.ta.w*.004/(dot(dq,dq)+.0015);}}
+  // weapon: lit by the lamps around the player and by the muzzle flash
+  let gd=normalize(vec3f(ud,1.));var tg=0.;var gh=vec2f(1.,0.);
+  for(var i=0;i<56;i++){gh=gs(gd*tg);if(gh.x<.0005||tg>1.){break;}tg+=gh.x*.9;}
+  if(gh.x<.0005){let q=gd*tg;let e=vec2f(.0007,0.);
+    let n=normalize(vec3f(gs(q+e.xyy).x-gs(q-e.xyy).x,gs(q+e.yxy).x-gs(q-e.yxy).x,gs(q+e.yyx).x-gs(q-e.yyx).x));
+    var la=vec3f(.03);
+    for(var a=0;a<2;a++){for(var b=0;b<2;b++){let k=floor(ro.xz/8.)+vec2f(f32(a),f32(b));let L=vec3f(k.x*8.,3.05,k.y*8.)-ro;la+=vec3f(.85,1.,.82)*lon(k)*5./(1.+dot(L,L));}}
+    let fz=vn(q*vec3f(900.,900.,300.));
+    var al=vec3f(.028,.028,.032);var sw=.6;var sp2=40.;
+    if(gh.y>.5){al=vec3f(.045,.045,.05)*(.5+fz);sw=.06;sp2=8.;
+      al*=.6+.4*smoothstep(.0,.003,abs(fract(q.z*38.)-.5)-.06);}
+    if(gh.y>1.5){al=vec3f(.03,.04,.06)*(.5+.9*vn(q*vec3f(400.,400.,60.)));sw=.02;}
+    if(gh.y<.5&&u.w.x<.5&&q.z<.36&&q.y>-.125){al*=.5+.5*step(.5,fract(q.z*320.));}
+    let up=vec3f(0.,cp,sp);let hl=normalize(up-gd);
+    col=la*(al*(max(dot(n,up),0.)+.25+.25*max(-n.z,0.))+sw*pow(max(dot(n,hl),0.),sp2))*1.6
+       +vec3f(1.,.6,.2)*u.r.w*8.*al*max(n.z+.6,0.);}
+  col+=vec3f(1.,.7,.3)*u.r.w*exp(-length(uv-mix(vec2f(.03,-.2),vec2f(.09,-.14),step(.5,u.w.x)))*11.)*4.;
+  col+=vec3f(.35,0.,0.)*u.a.z*r2*.5;
+  // camera: exposure, tone curve, vignette, slight desaturation, sensor noise
+  col*=1.7;col=(col*(2.51*col+.03))/(col*(2.43*col+.59)+.14);
+  col*=1.-.22*r2;col=mix(vec3f(dot(col,vec3f(.3,.6,.1))),col,.82);
+  col=pow(col,vec3f(.4545))+(h2(c.xy+fract(u.r.z)*91.)-.5)*.045;
+  return vec4f(col,1.);}
+`});
+const pl=dv.createRenderPipeline({layout:'auto',vertex:{module:sh,entryPoint:'v'},fragment:{module:sh,entryPoint:'f',targets:[{format:fm}]}});
+const UB=new Float32Array(88),ub=dv.createBuffer({size:352,usage:72}),bg=dv.createBindGroup({layout:pl.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:ub}}]});
+// the picture is drawn at `rk` of the window and scaled up; rk follows the frame time so slower GPUs stay playable
+let rk=Math.min(1,720/innerHeight),ft=0,fn=0;
+const rs=()=>{C.width=Math.max(2,innerWidth*rk|0);C.height=Math.max(2,innerHeight*rk|0);cx.configure({device:dv,format:fm})};rs();onresize=rs;
+// ---- the same world on the CPU, for walking and shooting
+const fr=x=>x-Math.floor(x),md=(a,n)=>(a%n+n)%n;
+const b2=(x,z,a,b)=>{x=Math.abs(x)-a;z=Math.abs(z)-b;return Math.hypot(Math.max(x,0),Math.max(z,0))+Math.min(Math.max(x,z),0)};
+const wm=(x,y,z)=>{const cx=(fr(x/8)-.5)*8,cz=(fr(z/8)-.5)*8,ix=Math.floor(x/8),iz=Math.floor(z/8),k=md(ix*3+iz*5,7);
+  let d=Math.min(y,59-Math.max(Math.abs(x),Math.abs(z)));
+  if(md(Math.floor((x+12)/24)+2*Math.floor((z+12)/24),3)!=1)d=Math.min(d,Math.abs(y-3.4)-.2,b2(cx,cz,.45,.45)-.05);
+  const lx=(fr(x/24)-.5)*24,lz=(fr(z/24)-.5)*24,ox=(fr(z/24+.5)-.5)*24,oz=(fr(x/24+.5)-.5)*24;
+  d=Math.min(d,Math.max(Math.min(Math.max(Math.abs(lx)-.15,Math.min(3-Math.abs(ox),2.45-y)),Math.max(Math.abs(lz)-.15,Math.min(3-Math.abs(oz),2.45-y))),y-3.6));
+  if(md(iz,3)!=1){if(k<3&&y<1.4)d=Math.min(d,b2(cx-2.4,cz,.87,2.07));if(k==4&&y<2.4)d=Math.min(d,b2(cx-2.3,cz,1,2.9))}
+  if(k&1){if(y<.8)d=Math.min(d,b2(cx+1.6,cz+2.4,1.3,.3))}
+  else{if(y<1)d=Math.min(d,b2(cx+2.3,cz-1.8,.5,.5));if(y<.7)d=Math.min(d,b2(cx+1.4,cz-1.6,.35,.35));if(y<1.6)d=Math.min(d,b2(cx+2.2,cz-1.8,.3,.3))}
+  return d};
+// ---- weapons: magazine, seconds between shots, automatic, pellets, spread, damage scale, reload seconds, kick
+const WP=[[15,.16,0,1,0,1,1.5,1],[30,.095,1,1,.012,.72,2,.5],[6,.8,0,8,.05,.45,2.4,1.7]],WN=['PISTOL','RIFLE','SHOTGUN'];
+// ---- state: me, and the other players by id
+const g={id:0,x:0,y:1.6,z:0,fy:0,vy:0,vx:0,vz:0,cr:0,yaw:0,pit:0,hp:100,k:0,dd:0,st:0,fl:0,hu:0,rc:0,cd:0,bob:0,rs:0,w:0,A:[15,30,6],rl:0,tl:0,md:0,hm:0,O:{}},K={};
+window.g=g;
+// ---- sound: everything is synthesized
+let ac,nb,mg,sv=1;
+const env=(n,t,v,d)=>{const a=ac.createGain();a.gain.setValueAtTime(v*sv,t);a.gain.exponentialRampToValueAtTime(.001,t+d);n.connect(a);a.connect(mg);return a};
+const osc=(ty,f0,f1,t,v,d)=>{const o=ac.createOscillator();o.type=ty;o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(f1,t+d);env(o,t,v,d);o.start(t);o.stop(t+d)};
+const noi=(fq,ty,t,v,d)=>{const s=ac.createBufferSource(),f=ac.createBiquadFilter();s.buffer=nb;f.type=ty;f.frequency.value=fq;s.connect(f);env(f,t,v,d);s.start(t);s.stop(t+d)};
+const snd=(k,v=1,w=0)=>{if(!ac)return;const t=ac.currentTime;sv=v;
+  if(k==0){noi(w==2?500:w?1300:900,'lowpass',t,w==2?2.4:1.6,w==2?.16:.09);noi(w?1800:2500,'bandpass',t,.9,w==2?.5:.35);osc('square',w==2?110:w?200:160,35,t,.7,.12)} // shot with tail
+  if(k==2){osc('sawtooth',300,70,t,.5,.3)}                                    // I am hit
+  if(k==3){osc('sine',660,990,t,.3,.12)}                                      // my bullet hit someone
+  if(k==4){noi(5000,'highpass',t,.25,.05)}                                    // bullet on wall
+  if(k==5){noi(180,'lowpass',t,.5,.07)}                                       // footstep
+  if(k==6){osc('sine',220,110,t,.4,.6);osc('sine',330,165,t+.1,.3,.6)}        // death
+  if(k==7){noi(3000,'bandpass',t,.5,.03)}                                     // empty click, weapon switch
+  if(k==8){noi(2200,'bandpass',t,.5,.04);noi(1500,'bandpass',t+.9,.6,.05);noi(2600,'bandpass',t+1.25,.7,.04)}}; // magazine out, in, slide
+const audio=()=>{if(ac)return;ac=new AudioContext;nb=ac.createBuffer(1,ac.sampleRate,ac.sampleRate);const d=nb.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;mg=ac.createGain();mg.gain.value=.35;mg.connect(ac.destination);
+  const s=ac.createBufferSource(),f=ac.createBiquadFilter(),a=ac.createGain();s.buffer=nb;s.loop=true;f.type='lowpass';f.frequency.value=90;a.gain.value=.5;s.connect(f);f.connect(a);a.connect(mg);s.start()}; // room rumble
+// ---- network: a relay server passes every message to the other players (server.js). without one, you walk alone
+let ws,net=0;
+const tx=o=>{if(net)ws.send(JSON.stringify(o))};
+const trace=(a,b,c,d,e,f)=>{UB[44]=a;UB[45]=b;UB[46]=c;UB[48]=d;UB[49]=e;UB[50]=f;g.tl=1};
+try{ws=new WebSocket(new URLSearchParams(location.search).get('s')||'ws'+location.protocol.slice(4)+'//'+location.host);
+  ws.onopen=()=>net=1;ws.onclose=ws.onerror=()=>{net=0;g.O={}};
+  ws.onmessage=e=>{const m=JSON.parse(e.data),o=g.O[m.id];
+    if(m.t=='i')g.id=m.id;
+    if(m.t=='s')g.O[m.id]=Object.assign(o||{},m);
+    if(m.t=='x')delete g.O[m.id];
+    if(m.t=='f'&&o){snd(0,Math.min(1,6/Math.hypot(o.x-g.x,o.z-g.z)),m.w);trace(o.x+Math.sin(o.yaw)*.6,1.3-o.c*.55,o.z-Math.cos(o.yaw)*.6,m.b[0],m.b[1],m.b[2])}
+    if(m.t=='h'&&m.to==g.id)hurt(m.d,m.id);
+    if(m.t=='k'&&m.by==g.id)g.k++}}catch{}
+// ---- game
+const hurt=(d,by)=>{if(g.st!=1)return;g.hp-=d;g.hu=1;snd(2);if(g.hp<=0){g.st=2;g.rs=3;g.dd++;snd(6);if(by)tx({t:'k',id:g.id,by})}};
+// ---- bots: while no other human is connected, six of them roam the map, hunt you when they see you, and shoot
+const place=o=>{do{o.x=Math.random()*110-55;o.z=Math.random()*110-55}while(wm(o.x,.5,o.z)<.45||Math.hypot(o.x-g.x,o.z-g.z)<15);o.tx=o.x;o.tz=o.z};
+const bots=dt=>{let hum=0;for(const id in g.O)if(!g.O[id].bot)hum++;
+  if(hum){for(const id in g.O)if(g.O[id].bot)delete g.O[id];return}
+  for(let i=1;i<7;i++){let o=g.O['b'+i];if(!o)o=g.O['b'+i]={bot:1,c:0,hp:0,rt:0,ct:1,x:0,z:0,yaw:0};
+    if(o.hp<=0){if((o.rt-=dt)<0){place(o);o.hp=100}continue}
+    const dx=g.x-o.x,dz=g.z-o.z,d=Math.hypot(dx,dz)||1;let see=0;
+    if(d<38&&g.st==1){let t=0;for(let j=0;j<60&&t<d;j++){const w=wm(o.x+dx/d*t,1.4,o.z+dz/d*t);if(w<.02)break;t+=w}see=t>=d}
+    if(see){o.yaw=Math.atan2(dx,-dz);o.tx=g.x;o.tz=g.z;
+      if((o.ct-=dt)<0){o.ct=.5+Math.random();snd(0,Math.min(1,6/d),1);const hit=Math.random()<Math.min(.6,5/d)*(1-g.cr*.4),m=hit?0:1.2;
+        trace(o.x+dx/d*.6,1.3,o.z+dz/d*.6,g.x+(Math.random()-.5)*m,g.y-.3+(Math.random()-.5)*m,g.z+(Math.random()-.5)*m);if(hit)hurt(12,0)}}
+    else{o.ct=.4+Math.random()*.5;if(Math.hypot(o.tx-o.x,o.tz-o.z)<1.5){o.tx=o.x+Math.random()*40-20;o.tz=o.z+Math.random()*40-20}}
+    if(!see||d>10){const ax=o.tx-o.x,az=o.tz-o.z,l=Math.hypot(ax,az)||1,v=2.7*dt,nx=o.x+ax/l*v,nz=o.z+az/l*v;if(!see)o.yaw=Math.atan2(ax,-az);
+      if(wm(nx,.5,o.z)>.4)o.x=nx;else o.tx=o.x+Math.random()*30-15;
+      if(wm(o.x,.5,nz)>.4)o.z=nz;else o.tz=o.z+Math.random()*30-15}}};
+const reload=()=>{if(g.rl<=0&&g.A[g.w]<WP[g.w][0]&&g.st==1){g.rl=WP[g.w][6];snd(8)}};
+const pick=w=>{w=(w+3)%3;if(w!=g.w&&g.st==1){g.w=w;g.rl=0;g.cd=.35;snd(7)}};
+const spawn=()=>{let x,z;do{x=Math.random()*110-55;z=Math.random()*110-55}while(wm(x,.5,z)<.45);Object.assign(g,{x,z,fy:0,vy:0,vx:0,vz:0,yaw:Math.random()*6.28,pit:0,hp:100,st:1,rl:0,A:[15,30,6]})};
+const HIT=[1.6,.19,100,1.15,.34,34,.5,.3,25]; // spheres down the body: height, radius, damage
+const shoot=()=>{const W=WP[g.w];if(g.cd>0||g.st!=1||g.rl>0)return;g.cd=W[1];if(!g.A[g.w]){snd(7);reload();return}g.A[g.w]--;g.fl=1;g.rc=Math.min(1.8,g.rc+W[7]);snd(0,1,g.w);
+  const dmg={};let ex,ey,ez;
+  for(let n=0;n<W[3];n++){
+    const ya=g.yaw+(Math.random()-.5)*W[4]*2,pi=g.pit+(Math.random()-.5)*W[4]*2+g.rc*.01,cp=Math.cos(pi),dx=Math.sin(ya)*cp,dy=Math.sin(pi),dz=-Math.cos(ya)*cp;
+    let tw=0;for(let i=0;i<120;i++){const d=wm(g.x+dx*tw,g.y+dy*tw,g.z+dz*tw);if(d<.01||tw>150)break;tw+=d}
+    let to=0,dm=0,bt=tw;
+    for(const id in g.O){const o=g.O[id];if(o.hp>0)for(let i=0;i<9;i+=3){const ox=o.x-g.x,oy=HIT[i]-o.c*.55-g.y,oz=o.z-g.z,b=ox*dx+oy*dy+oz*dz,h=b*b-(ox*ox+oy*oy+oz*oz-HIT[i+1]**2);if(h>0&&b>0&&b-Math.sqrt(h)<bt){bt=b-Math.sqrt(h);to=id;dm=HIT[i+2]}}}
+    if(to)dmg[to]=(dmg[to]||0)+dm*W[5];
+    ex=g.x+dx*bt;ey=g.y+dy*bt;ez=g.z+dz*bt;if(!n)trace(g.x+dx*.55,g.y+dy*.55-.1,g.z+dz*.55,ex,ey,ez)}
+  tx({t:'f',id:g.id,w:g.w,b:[+ex.toFixed(1),+ey.toFixed(1),+ez.toFixed(1)]});
+  let any=0;for(const id in dmg){any=1;const o=g.O[id];if(o.bot){if((o.hp-=dmg[id])<=0){g.k++;o.rt=4}}else tx({t:'h',id:g.id,to:+id,d:Math.round(dmg[id])})}
+  snd(any?3:4);if(any)g.hm=.15};
+C.onclick=()=>{audio();if(document.pointerLockElement!=C)C.requestPointerLock();if(!g.st)spawn()};
+onmousedown=e=>{if(document.pointerLockElement==C){g.md=1;shoot()}};onmouseup=e=>g.md=0;
+onmousemove=e=>{if(document.pointerLockElement==C){g.yaw+=e.movementX*.002;g.pit=Math.max(-1.4,Math.min(1.4,g.pit-e.movementY*.002))}};
+onwheel=e=>pick(g.w+Math.sign(e.deltaY));
+onkeydown=e=>{K[e.code]=1;if(e.code=='KeyR')reload();if(e.code=='Digit1')pick(0);if(e.code=='Digit2')pick(1);if(e.code=='Digit3')pick(2);if(e.code=='Space')e.preventDefault()};onkeyup=e=>K[e.code]=0;
+let last=0,step=0,sent=0;
+const frame=now=>{requestAnimationFrame(frame);const raw=now-last,dt=Math.min(.05,raw/1e3);last=now;const s=now/1e3;
+  // resolution follows the frame time (checked twice a second): under 55 fps fewer pixels, over 70 fps more
+  if(raw<500){ft+=raw;if(++fn>30){const a=ft/fn,o=rk;if(a>18)rk=Math.max(.3,rk*.85);else if(a<14)rk=Math.min(1,rk*1.08);ft=fn=0;if(o!=rk)rs()}}
+  if(g.st==1){
+    const cr=K.KeyC||K.ControlLeft?1:0,run=cr?.5:K.ShiftLeft?1.75:1,f=(K.KeyW|0)-(K.KeyS|0),r=(K.KeyD|0)-(K.KeyA|0),sy=Math.sin(g.yaw),cy=Math.cos(g.yaw),l=Math.hypot(f,r)||1;
+    // velocity eases toward the keys, so starts and stops are smooth; walls are slid along
+    const k=1-Math.exp(-dt*12),tvx=(sy*f+cy*r)/l*3.6*run,tvz=(-cy*f+sy*r)/l*3.6*run;
+    g.vx+=(tvx-g.vx)*k;g.vz+=(tvz-g.vz)*k;
+    const h=g.fy+.45,d0=wm(g.x,h,g.z),nx=g.x+g.vx*dt,nz=g.z+g.vz*dt,dx=wm(nx,h,g.z);
+    if(dx>.35||dx>d0)g.x=nx;else g.vx=0;
+    const dz=wm(g.x,h,nz);if(dz>.35||dz>wm(g.x,h,g.z))g.z=nz;else g.vz=0;
+    if(K.Space&&g.fy<=0)g.vy=4.3;
+    g.vy-=12*dt;g.fy+=g.vy*dt;if(g.fy<=0){g.fy=0;g.vy=0}
+    g.cr+=(cr-g.cr)*Math.min(1,dt*12);g.y=g.fy+1.6-g.cr*.6;
+    if((f||r)&&g.fy<=0){g.bob+=dt*7*run;if(g.bob-step>Math.PI){step=g.bob;snd(5,cr?.3:1)}}
+    g.cd-=dt;if(g.rl>0&&(g.rl-=dt)<=0)g.A[g.w]=WP[g.w][0];
+    if(g.md&&WP[g.w][2])shoot()}
+  if(g.st==2&&(g.rs-=dt)<0)spawn();
+  if(g.st)bots(dt);
+  if(now-sent>50){sent=now;tx({t:'s',id:g.id,x:+g.x.toFixed(2),z:+g.z.toFixed(2),yaw:+g.yaw.toFixed(2),c:+g.cr.toFixed(1),hp:g.st==1?g.hp:0})}
+  g.fl=Math.max(0,g.fl-dt*14);g.hu=Math.max(0,g.hu-dt*3);g.rc=Math.max(0,g.rc-dt*6);g.tl=Math.max(0,g.tl-dt*9);
+  // the camera is strapped to a body: a little bob with the steps, a kick with the shot
+  const bs=Math.sin(g.bob),bb=Math.sin(g.bob*2),dead=g.st==2;
+  UB[0]=C.width;UB[1]=C.height;UB[2]=s;UB[3]=g.fl;UB[4]=g.x;UB[5]=dead?.35:g.y+bb*.02;UB[6]=g.z;UB[7]=dead?1.2:bs*.006;
+  UB[8]=g.yaw+bs*.003;UB[9]=g.pit+bb*.003+g.rc*.03;UB[10]=dead?1:g.hu;UB[11]=Math.min(1,g.rc);
+  // others are drawn at a position that glides to the last one received (20 a second), and walk as far as they moved
+  let i=0,n=0;for(const id in g.O){const o=g.O[id];n++;if(o.rx==null||Math.hypot(o.x-o.rx,o.z-o.rz)>6){o.rx=o.x;o.rz=o.z;o.ph=0;o.mv=0}
+    const q=Math.min(1,dt*14),ax=(o.x-o.rx)*q,az=(o.z-o.rz)*q,l=Math.hypot(ax,az);o.rx+=ax;o.rz+=az;o.ph+=l*4.6;o.mv+=((l>dt*.3?1:0)-o.mv)*Math.min(1,dt*8);
+    if(i<8){UB[12+i*4]=o.rx;UB[13+i*4]=o.hp>0?-o.c*.55:-99;UB[14+i*4]=o.rz;UB[15+i*4]=o.yaw;UB[56+i*4]=o.ph;UB[57+i*4]=o.mv;i++}}
+  for(;i<8;i++)UB[13+i*4]=-99;
+  UB[47]=g.tl;UB[51]=g.rl>0?Math.sin(Math.min(1,g.rl*3,(WP[g.w][6]-g.rl)*5)*1.57):g.cd>.2&&!g.fl?Math.min(.5,(g.cd-.2)*2):0;UB[52]=g.w;
+  dv.queue.writeBuffer(ub,0,UB);
+  const en=dv.createCommandEncoder(),ps=en.beginRenderPass({colorAttachments:[{view:cx.getCurrentTexture().createView(),loadOp:'clear',storeOp:'store'}]});
+  ps.setPipeline(pl);ps.setBindGroup(0,bg);ps.draw(3);ps.end();dv.queue.submit([en.finish()]);
+  X.style.boxShadow=(g.hm-=dt)>0?'0 0 0 3px #f33':'0 0 2px #000';X.style.display=g.st==1?'':'none';
+  H.textContent=g.st?`HP ${Math.max(g.hp,0)}  ${WN[g.w]} ${g.rl>0?'RELOADING':g.A[g.w]+'/'+WP[g.w][0]}  KILLS ${g.k}  DEATHS ${g.dd}  ${n&&g.O.b1?'VS BOTS':`PLAYERS ${n+1}`}`:'';
+  T.innerHTML=`<b>●</b> REC  CAM-0${g.id}\n${new Date().toISOString().slice(0,19).replace('T',' ')}`;
+  M.textContent=g.st==1?'':g.st==2?`YOU DIED\n\nRESPAWN IN ${Math.ceil(g.rs)}`:M.textContent};
+requestAnimationFrame(frame)})();
+</script>
