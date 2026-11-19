@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>なんのポーズ？ | BLOCKYCLAW</title>
-<meta name="description" content="ぐにゃぐにゃ人形をコマ撮りで動かして、お題を伝えるゲーム。作った動きはリンクで友達に出題できる。">
-<meta property="og:title" content="なんのポーズ？">
-<meta property="og:description" content="ぐにゃぐにゃ人形のコマ撮りで、お題を伝える。この動き、なんのお題？">
+<title>物ボケ人形 | BLOCKYCLAW</title>
+<meta name="description" content="ぐにゃぐにゃ人形と、ひいた道具で物ボケ。リンクを送れば、友達がツッコんでくれる。">
+<meta property="og:title" content="物ボケ人形">
+<meta property="og:description" content="ぐにゃぐにゃ人形と道具で物ボケ。この物ボケに、ツッコめ。">
 <meta property="og:image" content="https://kokoaru-ltd.github.io/blockyclaw-site/thumbs/nannopose.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="../logo.svg" type="image/svg+xml">
@@ -26,20 +26,17 @@
   #bar { position: fixed; left: 0; right: 0; bottom: 12px; display: flex; flex-direction: column; gap: 8px; align-items: center; padding: 0 12px; }
   .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; align-items: center; }
   .row.faces .btn { font-size: 15px; padding: 4px 11px; }
-  .guess { font: inherit; font-size: 22px; width: min(320px, 60vw); padding: 7px 12px; border: 2.5px solid var(--ink);
+  .inp { font: inherit; font-size: 21px; width: min(380px, 66vw); padding: 7px 12px; border: 2.5px solid var(--ink);
     border-radius: 12px 16px 11px 18px; background: var(--skin); color: var(--ink); outline: none; }
-  .tries { color: var(--sub); font-size: 16px; min-height: 1.4em; }
-  .tries s { margin: 0 6px; }
+  .msg { font-size: 20px; text-align: center; }
   #panel { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-0.6deg); background: var(--skin);
     border: 2.5px solid var(--ink); border-radius: 18px 22px 16px 24px; box-shadow: 5px 5px 0 var(--ink);
     padding: 20px 22px; width: min(440px, calc(100vw - 48px)); text-align: center; display: none; }
   #panel h1 { font-size: 34px; margin: 0 0 4px; font-weight: 400; }
   #panel p { margin: 6px 0; line-height: 1.6; }
   #panel .sub { color: var(--sub); font-size: 15px; }
-  #panel .big { font-size: 30px; margin: 4px 0; }
+  #panel .big { font-size: 28px; margin: 4px 0; }
   #panel .row { margin-top: 12px; }
-  .cards { display: grid; gap: 8px; margin-top: 10px; }
-  .cards .btn { font-size: 22px; padding: 10px; }
   .home { color: var(--sub); font-size: 14px; }
 </style>
 </head>
@@ -51,43 +48,67 @@
 <script>
 const { Engine, Bodies, Body, Composite, Constraint, Query } = Matter;
 const INK = '#26221d', PAPER = '#f3eee2', SKIN = '#fffdf6', RED = '#d8432e';
-const SW = 1000, SH = 720, FLOOR = 650;
-const MAX_PINS = 5, MAX_FRAMES = 4, POSE_SEC = 45, ANSWER_SEC = 25, FRAME_MS = 520;
+const SW = 1000, SH = 720, FLOOR = 650, HORIZON = 500;
+const MAX_PINS = 6, MAX_FRAMES = 4, POSE_SEC = 45, ANSWER_SEC = 30, FRAME_MS = 560;
 const GAME_URL = 'https://kokoaru-ltd.github.io/blockyclaw-site/nannopose/';
-// お題と、答えとして認める言い方
-const ODAI = [
-  ['歯医者', 'はいしゃ,しか,歯科,歯科医,歯医者さん'], ['満員電車', 'まんいんでんしゃ,通勤電車,つうきんでんしゃ,満員'], ['金魚すくい', 'きんぎょすくい,金魚掬い,金魚'],
-  ['土下座', 'どげざ'], ['バンジージャンプ', 'ばんじー,バンジー'], ['自撮り', 'じどり,セルフィー,自撮'], ['寝坊した朝', 'ねぼう,寝坊,遅刻,ちこく'],
-  ['フラミンゴ', ''], ['ぎっくり腰', 'ぎっくりごし,腰痛,ようつう'], ['一本釣り', 'いっぽんづり,釣り,つり,魚釣り'], ['盆踊り', 'ぼんおどり,盆踊'],
-  ['ボウリング', 'ボーリング'], ['犬の散歩', 'いぬのさんぽ,散歩,さんぽ'], ['つり革', 'つりかわ,吊り革,吊革'], ['足がつった', 'あしがつった,こむら返り,こむらがえり,足つった'],
-  ['サーフィン', '波乗り,なみのり'], ['忍者', 'にんじゃ'], ['ゾンビ', ''], ['ラジオ体操', 'らじおたいそう,体操,たいそう'], ['タクシーを止める', 'タクシー'],
-  ['蚊をたたく', '蚊,蚊を叩く,かをたたく'], ['スキージャンプ', 'スキー,ジャンプ'], ['居眠り', 'いねむり,寝る,ねる,昼寝'], ['UFOにさらわれる', 'UFO,ゆーふぉー,宇宙人,うちゅうじん'],
-  ['ホームラン', '野球,やきゅう,バッター'], ['ヨガ', ''], ['相撲', 'すもう,力士,りきし'], ['カンフー', '拳法,けんぽう'], ['やり投げ', 'やりなげ,槍投げ'],
-  ['雪かき', 'ゆきかき,除雪,じょせつ'], ['綱引き', 'つなひき'], ['逆立ち', 'さかだち'], ['腕相撲', 'うでずもう'], ['ゴルフ', ''], ['卓球', 'たっきゅう,ピンポン'],
-  ['バレエ', 'バレリーナ'], ['ロボットダンス', 'ロボット'], ['いないいないばあ', 'いないいないばー,いないいないばぁ'], ['お辞儀', 'おじぎ'], ['ガッツポーズ', ''],
-  ['幽霊', 'ゆうれい,おばけ,お化け'], ['かかし', '案山子'], ['雷に打たれる', 'かみなり,雷,感電,かんでん'], ['バナナで滑る', 'バナナ,滑る,すべる'], ['おならを我慢', 'おなら,我慢,がまん'],
-  ['虫から逃げる', '虫,むし,ゴキブリ'], ['ゴール！', 'ゴール,サッカー'], ['コマネチ', ''], ['ハイタッチ', ''], ['重い荷物', 'おもいにもつ,荷物,にもつ,引っ越し'],
-  ['弓矢', 'ゆみや,弓,ゆみ,アーチェリー'], ['大物が釣れた', '大物,おおもの,魚,さかな'], ['カメラマン', 'カメラ,写真,しゃしん'], ['指揮者', 'しきしゃ,指揮'], ['ピアノ', ''],
-  ['ギター', ''], ['ドラム', '太鼓,たいこ'], ['マラソンのゴール', 'マラソン,まらそん'], ['木登り', 'きのぼり'], ['ジャンケン負け', 'じゃんけん,ジャンケン']];
 const FACES = [['normal','ふつう'],['happy','にこにこ'],['sad','かなしい'],['angry','おこ'],['surprise','びっくり'],['sleepy','ねむい'],['pain','いたい'],['dead','×_×']];
 const PART_NAMES = ['head', 'chest', 'pelvis', 'uaL', 'faL', 'uaR', 'faR', 'thL', 'shL', 'thR', 'shR'];
-const ORDER = ['uaL', 'faL', 'thL', 'shL', 'pelvis', 'chest', 'head', 'thR', 'shR', 'uaR', 'faR'];
 const SHAPES = { head: [72, 72, 1, 'round'], chest: [62, 74, 2], pelvis: [56, 44, 3], uaL: [20, 62, 4], faL: [18, 60, 5, 'hand'], uaR: [20, 62, 6],
   faR: [18, 60, 7, 'hand'], thL: [24, 70, 8], shL: [20, 70, 9, 'foot'], thR: [24, 70, 10], shR: [20, 70, 11, 'foot'] };
-const PROP_SHAPES = [[60, 60, 21, 'round'], [78, 62, 22], [14, 190, 23]];
+const BACK = ['uaL', 'faL', 'thL', 'shL', 'pelvis', 'chest', 'head'], FRONT = ['thR', 'shR', 'uaR', 'faR'];
+const SCENES = [['部屋', 'room'], ['駅のホーム', 'station'], ['浜辺', 'beach'], ['結婚式', 'wedding']];
+const RATINGS = [['大爆笑', '😂'], ['ふふっ', '😏'], ['すべった', '😐']];
+
+// ---------- 道具（形は物理用、飾りは手描き） ----------
+const R = (x, y, w, h, r = 0) => Bodies.rectangle(x, y, w, h, r ? { chamfer: { radius: r } } : {});
+const PROPS = [
+  { id: 'umbrella', name: '傘', colors: ['#d8574a', '#c99b6a'],
+    build: (x, y) => [Bodies.fromVertices(x, y - 74, [Array.from({ length: 9 }, (_, i) => { const a = Math.PI + i / 8 * Math.PI; return { x: Math.cos(a) * 64, y: Math.sin(a) * 40 }; })]), R(x, y, 6, 140, 2)],
+    deco: (L) => { for (const dx of [-38, -13, 13, 38]) L([[0, -104], [dx, -66]]); L([[0, 70], [0, 80], [9, 86], [16, 80]], 2.8); } },
+  { id: 'fish', name: '魚', colors: ['#8fb3c9'], build: (x, y) => [R(x, y, 96, 34, 16), Bodies.fromVertices(x + 54, y, [[{ x: 0, y: 0 }, { x: 26, y: -18 }, { x: 26, y: 18 }]])],
+    deco: (L, dot) => { dot(-32, -4, 3.5); L([[-20, -12], [-16, 0], [-20, 12]]); L([[0, 4], [12, 6], [24, 4]]); } },
+  { id: 'banana', name: 'バナナ', colors: ['#f0cf5a'], build: (x, y) => [R(x, y, 90, 22, 11)],
+    deco: (L) => { L([[-40, -2], [0, 6], [40, -2]]); L([[42, -6], [50, -12]]); } },
+  { id: 'cone', name: '三角コーン', colors: ['#ec8a3c', '#ec8a3c'], build: (x, y) => [Bodies.trapezoid(x, y - 6, 54, 80, 0.75), R(x, y + 38, 66, 10, 2)],
+    deco: (L) => { L([[-11, -22], [11, -22]]); L([[-17, 4], [17, 4]]); } },
+  { id: 'broom', name: 'ほうき', colors: ['#c99b6a', '#e3c37a'], build: (x, y) => [R(x, y - 20, 6, 130, 2), R(x, y + 62, 46, 40, 6)],
+    deco: (L) => { for (const dx of [-14, -5, 5, 14]) L([[dx, 50], [dx * 1.2, 80]]); } },
+  { id: 'pan', name: 'フライパン', colors: ['#5d5a55', '#5d5a55'], build: (x, y) => [Bodies.circle(x, y, 34), R(x + 64, y, 64, 9, 4)],
+    deco: (L, dot, ring) => { ring(0, 0, 25); } },
+  { id: 'ladder', name: 'はしご', colors: ['#c9a27a'], build: (x, y) => [R(x, y, 52, 170, 3)], hollow: true,
+    deco: (L) => { L([[-22, -85], [-22, 85]], 2.6); L([[22, -85], [22, 85]], 2.6); for (let i = -3; i <= 3; i++) L([[-22, i * 24], [22, i * 24]], 2.4); } },
+  { id: 'boot', name: '長ぐつ', colors: ['#5b8f5e', '#5b8f5e'], build: (x, y) => [R(x, y - 12, 34, 74, 6), R(x + 14, y + 30, 62, 22, 8)],
+    deco: (L) => { L([[-17, -36], [17, -36]]); } },
+  { id: 'box', name: 'ダンボール', colors: ['#cfa978'], build: (x, y) => [R(x, y, 92, 70, 3)],
+    deco: (L) => { L([[-46, -24], [46, -24]]); L([[0, -35], [0, -24]]); } },
+  { id: 'ball', name: 'ボール', colors: ['#6aa0d8'], build: (x, y) => [Bodies.circle(x, y, 30)],
+    deco: (L) => { L([[-28, 0], [0, 6], [28, 0]]); L([[0, -29], [-6, 0], [0, 29]]); } },
+  { id: 'plunger', name: 'スッポン', colors: ['#c99b6a', '#c94a3d'], build: (x, y) => [R(x, y - 18, 6, 100, 2), R(x, y + 42, 44, 22, 10)], deco: () => {} },
+  { id: 'tire', name: 'タイヤ', colors: ['#3d3a36'], build: (x, y) => [Bodies.circle(x, y, 40)],
+    deco: (L, dot, ring) => { ring(0, 0, 20, '#f3eee2'); } },
+  { id: 'chicken', name: 'ゴムのニワトリ', colors: ['#f2d04f', '#f2d04f'], build: (x, y) => [R(x, y, 26, 110, 12), Bodies.circle(x, y - 62, 15)],
+    deco: (L, dot) => { dot(5, -64, 2.5); L([[14, -64], [26, -60], [14, -56]]); L([[-6, -76], [-2, -84], [3, -77], [7, -84], [10, -76]]); L([[-6, 52], [-14, 64]]); L([[6, 52], [14, 64]]); } },
+  { id: 'fan', name: 'せんぷうき', colors: ['#7fb7b0', '#7fb7b0'], build: (x, y) => [Bodies.circle(x, y - 36, 34), R(x, y + 26, 10, 70, 3)],
+    deco: (L, dot, ring) => { ring(0, -36, 22); L([[0, -58], [0, -14]]); L([[-22, -36], [22, -36]]); L([[-24, 60], [24, 60]], 3); } },
+];
 
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 const panel = document.getElementById('panel'), bar = document.getElementById('bar');
 let W, H, DPR, s = 1, ox = 0, oy = 0;
-let engine, parts = [], props = [], pins = [], drag = null, grain;
-let state = 'title', odai = { t: '', alts: [] }, face = 'normal', timeLeft = 0, timerOn = false, reveal = false, hideOdai = false;
-let frames = [], playStart = 0, flash = 0, answerStartAt = 0, answerDone = false, tries = [];
+let engine, parts = [], props = [], pins = [], grips = [], drag = null, grain;
+let state = 'title', scene = 0, propIds = [0, 1, 2], caption = '', face = 'normal', timeLeft = 0, timerOn = false;
+let frames = [], playStart = 0, flash = 0, tsukkomi = '', rating = -1, reveal = false, answerDone = false, reroll = 1;
 
 // ---------- 手描き風の線 ----------
 function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a);
   t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 let boil = 0;
-function sketch(pts, seed, { closed = true, fill = null, width = 3, amp = 1.5, twice = true } = {}) {
+function sketch(pts, seed, { closed = true, fill = null, width = 3, amp = 1.5, twice = true, color = INK, shade = false } = {}) {
+  if (shade && fill) { // 2.5D：右下にずらした影
+    const r0 = rng(seed * 977 + boil * 131);
+    ctx.beginPath(); pts.forEach(([x, y], i) => { const px = x + 5 + (r0() - 0.5) * amp, py = y + 6 + (r0() - 0.5) * amp; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+    ctx.closePath(); ctx.fillStyle = 'rgba(38,34,29,0.16)'; ctx.fill();
+  }
   for (let pass = 0; pass < (twice ? 2 : 1); pass++) {
     const r = rng(seed * 977 + boil * 131 + pass * 7919);
     const p = pts.map(([x, y]) => [x + (r() - 0.5) * 2 * amp, y + (r() - 0.5) * 2 * amp]);
@@ -103,7 +124,7 @@ function sketch(pts, seed, { closed = true, fill = null, width = 3, amp = 1.5, t
       ctx.lineTo(p[p.length - 1][0], p[p.length - 1][1]);
     }
     if (fill && pass === 0) { ctx.fillStyle = fill; ctx.fill(); }
-    ctx.lineWidth = width * (pass ? 0.55 : 1); ctx.strokeStyle = INK; ctx.lineJoin = ctx.lineCap = 'round'; ctx.stroke();
+    ctx.lineWidth = width * (pass ? 0.55 : 1); ctx.strokeStyle = color; ctx.lineJoin = ctx.lineCap = 'round'; ctx.stroke();
   }
 }
 function capsulePts(w, h) {
@@ -113,17 +134,16 @@ function capsulePts(w, h) {
   return pts;
 }
 function circlePts(r, n = 14) { return Array.from({ length: n }, (_, i) => [Math.cos(i / n * 6.283) * r, Math.sin(i / n * 6.283) * r]); }
-// tf = { x, y, a }
 function toWorld(tf, pts) { const c = Math.cos(tf.a), si = Math.sin(tf.a); return pts.map(([x, y]) => [tf.x + x * c - y * si, tf.y + x * si + y * c]); }
 const tfOf = (b) => ({ x: b.position.x, y: b.position.y, a: b.angle });
 
-// ---------- 物理の世界（出題中だけ使う） ----------
+// ---------- 世界 ----------
 function buildWorld() {
-  engine = Engine.create(); engine.gravity.y = 1; parts = []; props = []; pins = []; drag = null;
+  engine = Engine.create(); engine.gravity.y = 1; parts = []; props = []; pins = []; grips = []; drag = null;
   const t = 300, st = { isStatic: true, friction: 1 };
   Composite.add(engine.world, [Bodies.rectangle(SW / 2, FLOOR + t / 2, SW + 600, t, st), Bodies.rectangle(-t / 2, SH / 2, t, SH * 3, st),
     Bodies.rectangle(SW + t / 2, SH / 2, t, SH * 3, st), Bodies.rectangle(SW / 2, -t / 2 - 200, SW + 600, t, st)]);
-  makeDoll(SW / 2, 400); makeProps();
+  makeDoll(SW / 2, 410); makeProps();
 }
 function makeDoll(cx, cy) {
   const g = { collisionFilter: { group: -1 }, frictionAir: 0.035, friction: 0.9, restitution: 0.05, density: 0.0018 };
@@ -147,14 +167,22 @@ function makeDoll(cx, cy) {
   addPin(head, { x: 0, y: -26 });
 }
 function makeProps() {
-  const o = { frictionAir: 0.02, friction: 0.9, restitution: 0.2, density: 0.001 };
-  const add = (body) => { body.isProp = true; props.push({ body }); Composite.add(engine.world, body); };
-  add(Bodies.circle(250, FLOOR - 31, 30, o));
-  add(Bodies.rectangle(760, FLOOR - 32, 78, 62, { ...o, chamfer: { radius: 6 } }));
-  add(Bodies.rectangle(660, FLOOR - 96, 14, 190, { ...o, chamfer: { radius: 6 } }));
+  const spots = [190, 790, 900];
+  propIds.forEach((pid, k) => {
+    const def = PROPS[pid], x = spots[k], y = 300;
+    const ps = def.build(x, y);
+    const body = ps.length > 1 ? Body.create({ parts: ps }) : ps[0];
+    Body.set(body, { frictionAir: 0.02, friction: 0.9, restitution: 0.15 }); Body.setDensity(body, 0.001);
+    const off = { x: x - body.position.x, y: y - body.position.y }; // 飾りの基準点（重心からのずれ）
+    body.isProp = true; body.label = 'prop' + k;
+    // 床の上に置く
+    const minY = Math.max(...body.vertices.map(v => v.y)); Body.setPosition(body, { x: body.position.x, y: body.position.y + (FLOOR - 2 - minY) });
+    props.push({ body, def, off });
+    Composite.add(engine.world, body);
+  });
 }
 
-// ---------- コマ（1枚の絵）＝ 体14個の位置と角度・表情・画びょう ----------
+// ---------- 保存（コマ）とリンク ----------
 function liveView() {
   return { tf: [...PART_NAMES.map(n => tfOf(parts.find(p => p.name === n).body)), ...props.map(p => tfOf(p.body))],
     face, pins: pins.map(c => ({ x: c.pointA.x, y: c.pointA.y })) };
@@ -163,7 +191,6 @@ function snapshot() {
   const v = liveView();
   return { tf: v.tf.map(t => ({ x: Math.round(t.x), y: Math.round(t.y), a: Math.round(t.a * 100) / 100 })), face, pins: v.pins.map(p => ({ x: Math.round(p.x), y: Math.round(p.y) })) };
 }
-// お題の文字は、リンクを見ただけでは読めないように混ぜてから入れる
 const SCR = [0x5b, 0x1f, 0xa7, 0x33, 0xc9, 0x6e, 0x81, 0x24];
 function scramble(text) {
   const b = new TextEncoder().encode(text).map((v, i) => v ^ SCR[i % SCR.length]);
@@ -171,60 +198,66 @@ function scramble(text) {
 }
 function unscramble(code) {
   const bin = atob(code.replace(/-/g, '+').replace(/_/g, '/'));
-  const b = Uint8Array.from(bin, (c, i) => c.charCodeAt(0) ^ SCR[i % SCR.length]);
-  return new TextDecoder().decode(b);
+  return new TextDecoder().decode(Uint8Array.from(bin, (c, i) => c.charCodeAt(0) ^ SCR[i % SCR.length]));
 }
-function encodeFrames() {
+function encodeBoke() {
   const nums = [frames.length];
   for (const f of frames) {
     nums.push(FACES.findIndex(x => x[0] === f.face), f.pins.length);
     f.pins.forEach(p => nums.push(p.x, p.y));
     f.tf.forEach(t => nums.push(t.x, t.y, Math.round(t.a * 100)));
   }
-  return ['3', scramble(odai.t), scramble(odai.alts.join(',')), nums.join('.')].join('~');
+  return ['4', scramble(caption), [scene, ...propIds].join('.'), nums.join('.')].join('~');
 }
-function readFrames(a, i) {
-  const n = a[i++]; if (!(n >= 1 && n <= MAX_FRAMES)) return null;
-  const fs = [];
-  for (let f = 0; f < n; f++) {
-    const fc = (FACES[a[i++]] || FACES[0])[0], np = a[i++], pinsArr = [];
-    for (let k = 0; k < np; k++) pinsArr.push({ x: a[i++], y: a[i++] });
-    const tf = []; for (let k = 0; k < 14; k++) tf.push({ x: a[i++], y: a[i++], a: a[i++] / 100 });
-    if (tf.some(t => isNaN(t.x) || isNaN(t.a))) return null;
-    fs.push({ face: fc, pins: pinsArr, tf });
-  }
-  return fs;
-}
-function decodeFrames(str) {
+function decodeBoke(str) {
   try {
-    if (str.startsWith('3~')) { // 自由入力のお題
-      const [, p, al, rest] = str.split('~');
-      const t = unscramble(p).trim(); if (!t) return null;
-      const fs = readFrames(rest.split('.').map(Number), 0); if (!fs) return null;
-      return { odai: { t, alts: unscramble(al || '').split(',').map(x => x.trim()).filter(Boolean) }, frames: fs };
+    const [v, cap, meta, rest] = str.split('~'); if (v !== '4') return null;
+    const [sc, ...ids] = meta.split('.').map(Number);
+    if (!SCENES[sc] || ids.length !== 3 || ids.some(i => !PROPS[i])) return null;
+    const a = rest.split('.').map(Number); let i = 0; const n = a[i++]; if (!(n >= 1 && n <= MAX_FRAMES)) return null;
+    const fs = [];
+    for (let f = 0; f < n; f++) {
+      const fc = (FACES[a[i++]] || FACES[0])[0], np = a[i++], pa = [];
+      for (let k = 0; k < np; k++) pa.push({ x: a[i++], y: a[i++] });
+      const tf = []; for (let k = 0; k < 14; k++) tf.push({ x: a[i++], y: a[i++], a: a[i++] / 100 });
+      if (tf.some(t => isNaN(t.x) || isNaN(t.a))) return null;
+      fs.push({ face: fc, pins: pa, tf });
     }
-    const a = str.split('.').map(Number); if (a.some(isNaN) || a[0] !== 2) return null; // 前の版のリンク
-    let idx = -1; for (let k = 0; k < ODAI.length; k++) if ((k * 7 + 13) % 997 === a[1]) idx = k;
-    const fs = readFrames(a, 2); if (idx < 0 || !fs) return null;
-    return { odai: { t: ODAI[idx][0], alts: [] }, frames: fs };
+    return { caption: unscramble(cap), scene: sc, propIds: ids, frames: fs };
   } catch { return null; }
 }
+function decodeReply(str) { try { const [t, r] = str.split('~'); return { tsukkomi: unscramble(t), rating: Number(r) }; } catch { return null; } }
 
-// ---------- 画びょう・つかむ ----------
+// ---------- 画びょう・つかむ・持たせる ----------
 function addPin(body, offset) {
   if (pins.length >= MAX_PINS) removePin(pins[0]);
   const c = Constraint.create({ pointA: { x: body.position.x + offset.x, y: body.position.y + offset.y }, bodyB: body, pointB: { ...offset }, length: 0, stiffness: 0.9, damping: 0.2 });
   pins.push(c); Composite.add(engine.world, c);
 }
 function removePin(c) { pins = pins.filter(p => p !== c); Composite.remove(engine.world, c); }
+function removeGrips(body) { grips.filter(g => g.bodyB === body).forEach(g => Composite.remove(engine.world, g)); grips = grips.filter(g => g.bodyB !== body); }
 function pos(e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left - ox) / s, y: (e.clientY - r.top - oy) / s }; }
 function endPoint(name, tf) { const [w, h, , end] = SHAPES[name]; const off = end === 'hand' ? [0, h / 2 + 4] : [5, h / 2 + 3]; const [[x, y]] = toWorld(tf, [off]); return { x, y }; }
 function pick(m) {
-  const front = [...ORDER].reverse().map(n => parts.find(p => p.name === n));
-  for (const p of front) if (SHAPES[p.name][3] === 'hand' || SHAPES[p.name][3] === 'foot') { const e = endPoint(p.name, tfOf(p.body)); if (Math.hypot(e.x - m.x, e.y - m.y) < 20) return p.body; }
-  for (const p of [...front, ...props]) if (Query.point([p.body], m).length) return p.body;
-  let best = null, bd = 22;
-  for (const p of [...front, ...props]) for (const v of p.body.vertices) { const d = Math.hypot(v.x - m.x, v.y - m.y); if (d < bd) { bd = d; best = p.body; } }
+  const front = [...FRONT].reverse().map(n => parts.find(p => p.name === n));
+  const back = [...BACK].reverse().map(n => parts.find(p => p.name === n));
+  const all = [...front, ...props, ...back];
+  for (const p of [...front, ...back]) if (SHAPES[p.name][3] === 'hand' || SHAPES[p.name][3] === 'foot') { const e = endPoint(p.name, tfOf(p.body)); if (Math.hypot(e.x - m.x, e.y - m.y) < 20) return p.body; }
+  for (const p of all) if (Query.point([p.body], m).length) return p.body;
+  let best = null, bd = 24; // 細い棒（傘の柄など）もつかめるよう、ふちまでの距離で探す
+  for (const p of all) { const d = distToBody(p.body, m); if (d < bd) { bd = d; best = p.body; } }
+  return best;
+}
+function distToBody(b, m) {
+  let best = Infinity;
+  for (const part of (b.parts.length > 1 ? b.parts.slice(1) : [b])) {
+    const vs = part.vertices;
+    for (let i = 0; i < vs.length; i++) {
+      const a = vs[i], c = vs[(i + 1) % vs.length], dx = c.x - a.x, dy = c.y - a.y, l2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((m.x - a.x) * dx + (m.y - a.y) * dy) / l2));
+      best = Math.min(best, Math.hypot(m.x - (a.x + t * dx), m.y - (a.y + t * dy)));
+    }
+  }
   return best;
 }
 function startDrag(body, anchor, m, e, fromPin) {
@@ -240,6 +273,7 @@ cv.addEventListener('pointerdown', (e) => {
   if (hit) { const body = hit.bodyB, a = { ...hit.pointA }; removePin(hit); startDrag(body, a, m, e, true); return; }
   const body = pick(m); if (!body) return;
   pins.filter(p => p.bodyB === body).forEach(removePin);
+  if (body.isProp) removeGrips(body);
   startDrag(body, m, m, e, false);
 });
 cv.addEventListener('pointermove', (e) => { if (!drag) return; const m = pos(e); drag.c.pointA = m; if (Math.hypot(m.x - drag.x0, m.y - drag.y0) > 6) drag.moved = true; });
@@ -248,7 +282,21 @@ function release() {
   const { c, body, fromPin, moved, t0 } = drag; Composite.remove(engine.world, c); drag = null;
   if (state !== 'pose') return;
   if (fromPin && !moved && performance.now() - t0 < 400) return;
-  if (!body.isProp) addPin(body, { x: c.pointB.x, y: c.pointB.y });
+  const at = { x: body.position.x + c.pointB.x, y: body.position.y + c.pointB.y };
+  if (body.isProp) { // 人形に押し当てて離すと、くっつく（手・頭・体どこでも）
+    const target = parts.map(p => p.body).find(b => Query.point([b], at).length) ||
+      parts.filter(p => SHAPES[p.name][3]).map(p => ({ b: p.body, e: endPoint(p.name, tfOf(p.body)) })).filter(o => Math.hypot(o.e.x - at.x, o.e.y - at.y) < 28).map(o => o.b)[0];
+    if (target) {
+      const g = Constraint.create({ bodyA: target, pointA: { x: at.x - target.position.x, y: at.y - target.position.y }, bodyB: body, pointB: { x: c.pointB.x, y: c.pointB.y }, length: 0, stiffness: 0.9, damping: 0.2 });
+      // 2点で留めて、くるくる回らないようにする
+      const ang = body.angle, d2 = { x: Math.cos(ang) * 0 - Math.sin(ang) * 18, y: Math.sin(ang) * 0 + Math.cos(ang) * 18 };
+      const at2 = { x: at.x + d2.x, y: at.y + d2.y };
+      const g2 = Constraint.create({ bodyA: target, pointA: { x: at2.x - target.position.x, y: at2.y - target.position.y }, bodyB: body, pointB: { x: c.pointB.x + d2.x, y: c.pointB.y + d2.y }, length: 0, stiffness: 0.5, damping: 0.2 });
+      grips.push(g, g2); Composite.add(engine.world, [g, g2]); flash = 0.25;
+    } else addPin(body, { x: c.pointB.x, y: c.pointB.y });
+    return;
+  }
+  addPin(body, { x: c.pointB.x, y: c.pointB.y });
 }
 cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release);
 
@@ -259,33 +307,82 @@ function makeGrain() {
   for (let i = 0; i < d.data.length; i += 4) { const v = r() < 0.5 ? 0 : 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = r() * 16; }
   g.putImageData(d, 0, 0);
 }
-function drawRoom() {
-  sketch([[-40, FLOOR], [SW * 0.3, FLOOR + 2], [SW * 0.62, FLOOR - 1], [SW + 40, FLOOR + 1]], 50, { closed: false, width: 3.2, amp: 1.2 });
-  const r = rng(77);
-  for (let i = 0; i < 9; i++) { const x = r() * SW, y = FLOOR + 14 + r() * 40, l = 20 + r() * 60;
-    sketch([[x, y], [x + l / 2, y + 1], [x + l, y]], 60 + i, { closed: false, width: 1.6, amp: 0.8, twice: false }); }
-  ctx.globalAlpha = 0.45;
-  const wx = 90, wy = 190;
-  sketch([[wx, wy], [wx + 60, wy], [wx + 120, wy], [wx + 120, wy + 75], [wx + 120, wy + 150], [wx + 60, wy + 150], [wx, wy + 150], [wx, wy + 75]], 70, { width: 2.2, amp: 1.2 });
-  sketch([[wx + 60, wy], [wx + 61, wy + 75], [wx + 60, wy + 150]], 71, { closed: false, width: 1.8, twice: false });
-  sketch([[wx, wy + 75], [wx + 60, wy + 76], [wx + 120, wy + 75]], 72, { closed: false, width: 1.8, twice: false });
-  const kx = 880, ky = 230;
-  sketch(circlePts(34).map(([x, y]) => [kx + x, ky + y]), 73, { width: 2.2, amp: 1.2 });
-  sketch([[kx, ky], [kx + 1, ky - 12], [kx, ky - 22]], 74, { closed: false, width: 2, twice: false });
-  sketch([[kx, ky], [kx + 8, ky + 3], [kx + 15, ky + 6]], 75, { closed: false, width: 2, twice: false });
+function line(pts, seed, w = 2, alpha = 1) { ctx.globalAlpha = alpha; sketch(pts, seed, { closed: false, width: w, amp: 1, twice: false }); ctx.globalAlpha = 1; }
+function quad(pts, seed, fill, alpha = 1, w = 2.2) {
+  const p = []; pts.forEach((a, i) => { const b = pts[(i + 1) % pts.length]; p.push(a, [(a[0] + b[0]) / 2 + 0.01, (a[1] + b[1]) / 2]); });
+  ctx.globalAlpha = alpha; sketch(p, seed, { fill, width: w, amp: 1.2 }); ctx.globalAlpha = 1;
+}
+function drawScene() {
+  const VX = SW / 2, VY = 260, kind = SCENES[scene][1];
+  // 奥の壁・床（遠近）
+  const wallCol = kind === 'beach' ? '#dbe8ef' : kind === 'station' ? '#e6e3dc' : kind === 'wedding' ? '#f3e6e6' : '#efe7d6';
+  const floorCol = kind === 'beach' ? '#efe2c4' : kind === 'station' ? '#d9d6cf' : kind === 'wedding' ? '#e9dcd0' : '#e6d6bb';
+  ctx.fillStyle = wallCol; ctx.fillRect(-3000, -3000, SW + 6000, HORIZON + 3000); // 画面のはしまで塗る
+  ctx.fillStyle = floorCol; ctx.fillRect(-3000, HORIZON, SW + 6000, 3000);
+  line([[-40, HORIZON], [SW / 2, HORIZON + 1], [SW + 40, HORIZON]], 200, 2.4);
+  // 床の遠近線
+  ctx.save(); ctx.beginPath(); ctx.rect(-60, HORIZON, SW + 120, SH); ctx.clip();
+  for (let i = -6; i <= 6; i++) { const bx = VX + i * 130; const tx = VX + (bx - VX) * (HORIZON - VY) / (SH + 40 - VY);
+    line([[tx, HORIZON], [bx, SH + 40]], 210 + i, 1.4, kind === 'beach' ? 0 : 0.35); }
+  for (const yy of [540, 590, 650, 715]) line([[-40, yy], [SW + 40, yy + 1]], 230 + yy, 1.2, kind === 'beach' ? 0 : 0.25);
+  ctx.restore();
+  if (kind === 'room') {
+    quad([[110, 170], [230, 170], [230, 320], [110, 320]], 240, '#dbe8ef', 0.9); line([[170, 170], [170, 320]], 241); line([[110, 245], [230, 245]], 242);
+    sketch(circlePts(34).map(([x, y]) => [880 + x, 200 + y]), 243, { fill: SKIN, width: 2.2, amp: 1 }); line([[880, 200], [881, 180]], 244); line([[880, 200], [894, 206]], 245);
+    quad([[640, 180], [740, 175], [742, 250], [642, 255]], 246, '#f2d9a8', 0.9); line([[660, 235], [690, 205], [720, 235]], 247, 1.6);
+    ctx.save(); ctx.translate(500, 600); ctx.scale(1, 0.22); sketch(circlePts(300, 20), 248, { fill: 'rgba(216,120,100,0.35)', width: 2, amp: 2 }); ctx.restore();
+  } else if (kind === 'station') {
+    quad([[640, 220], [860, 220], [860, 276], [640, 276]], 250, SKIN, 1);
+    ctx.fillStyle = INK; ctx.font = '32px Yomogi, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('ぐにゃ 駅', 750, 249);
+    line([[660, 220], [660, 160]], 251); line([[840, 220], [840, 160]], 252);
+    quad([[60, 120], [100, 120], [100, HORIZON], [60, HORIZON]], 253, '#cfcac0', 1); quad([[900, 120], [940, 120], [940, HORIZON], [900, HORIZON]], 254, '#cfcac0', 1);
+    quad([[-40, 600], [SW + 40, 600], [SW + 40, 622], [-40, 622]], 255, '#efcf5a', 1, 1.6);
+    for (let x = 0; x < SW; x += 26) { ctx.fillStyle = 'rgba(38,34,29,0.35)'; ctx.beginPath(); ctx.arc(x + 8, 611, 2.2, 0, 6.3); ctx.fill(); }
+    quad([[700, 430], [860, 430], [860, 450], [700, 450]], 256, '#b98d64', 1); line([[715, 450], [715, 490]], 257); line([[845, 450], [845, 490]], 258);
+  } else if (kind === 'beach') {
+    quad([[-40, 400], [SW + 40, 400], [SW + 40, HORIZON], [-40, HORIZON]], 260, '#9cc6d8', 1, 1.6);
+    for (let k = 0; k < 6; k++) { const x = 80 + k * 160, y = 430 + (k % 2) * 30; line([[x, y], [x + 15, y - 7], [x + 30, y], [x + 45, y - 7]], 261 + k, 1.6, 0.7); }
+    sketch(circlePts(46).map(([x, y]) => [850 + x, 150 + y]), 268, { fill: '#f6d36b', width: 2.4, amp: 1 });
+    const r = rng(9); for (let k = 0; k < 40; k++) { ctx.fillStyle = 'rgba(120,90,50,0.35)'; ctx.beginPath(); ctx.arc(r() * SW, HORIZON + 20 + r() * 200, 1.6, 0, 6.3); ctx.fill(); }
+    line([[150, HORIZON + 60], [158, 330]], 269, 2.6); sketch([[60, 340], [158, 290], [256, 340], [158, 330]], 270, { fill: '#e8857a', width: 2.4, amp: 1.2 });
+  } else if (kind === 'wedding') {
+    quad([[400, 120], [600, 120], [600, 380], [400, 380]], 280, '#fbf3f3', 1);
+    sketch(circlePts(40).map(([x, y]) => [500 + x, 170 + y]), 281, { fill: '#f2c9cf', width: 2.2, amp: 1 });
+    ctx.fillStyle = INK; ctx.font = '26px Yomogi, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('♡', 500, 172);
+    for (const x of [140, 860]) { quad([[x - 30, 300], [x + 30, 300], [x + 22, HORIZON], [x - 22, HORIZON]], 282 + x, '#f5efe4', 1); sketch(circlePts(26).map(([a, b]) => [x + a, 280 + b]), 283 + x, { fill: '#f0b8c2', width: 2, amp: 1 }); }
+    ctx.save(); ctx.beginPath(); ctx.rect(-60, HORIZON, SW + 120, SH); ctx.clip();
+    quad([[470, HORIZON], [530, HORIZON], [700, SH + 40], [300, SH + 40]], 285, 'rgba(210,90,90,0.35)', 1); ctx.restore();
+  }
+}
+function drawShadows(v) { // 床に落ちる影（高いほど薄く小さく）
+  ctx.fillStyle = 'rgba(38,34,29,1)';
+  const each = (tf, w) => { const hgt = FLOOR - tf.y, k = Math.max(0, 1 - hgt / 420); if (k <= 0) return;
+    ctx.globalAlpha = 0.16 * k; ctx.beginPath(); ctx.ellipse(tf.x + hgt * 0.06, FLOOR + 4, w * (0.55 + 0.45 * k), 6 * k + 2, 0, 0, 6.3); ctx.fill(); };
+  PART_NAMES.forEach((n, k) => each(v.tf[k], SHAPES[n][0] * 0.7)); props.forEach((p, k) => each(v.tf[11 + k], 40));
   ctx.globalAlpha = 1;
 }
 function drawShape(tf, w, h, seed, kind) {
-  sketch(toWorld(tf, kind === 'round' ? circlePts(w / 2) : capsulePts(w, h)), seed, { fill: SKIN, width: 3.2 });
+  sketch(toWorld(tf, kind === 'round' ? circlePts(w / 2) : capsulePts(w, h)), seed, { fill: SKIN, width: 3.2, shade: true });
   if (kind === 'hand' || kind === 'foot') {
     const off = kind === 'hand' ? [0, h / 2 + 4] : [5, h / 2 + 3];
     const shape = kind === 'hand' ? circlePts(12, 10) : capsulePts(34, 20);
-    sketch(toWorld(tf, shape.map(([x, y]) => [x + off[0], y + off[1]])), seed + 100, { fill: SKIN, width: 3 });
+    sketch(toWorld(tf, shape.map(([x, y]) => [x + off[0], y + off[1]])), seed + 100, { fill: SKIN, width: 3, shade: true });
   }
 }
+function drawProp(p, tf, k) {
+  Body.setPosition(p.body, { x: tf.x, y: tf.y }); Body.setAngle(p.body, tf.a); // 再生中は保存した位置に置いてから描く
+  const list = p.body.parts.length > 1 ? p.body.parts.slice(1) : [p.body];
+  list.forEach((part, i) => { if (!p.def.hollow) sketch(part.vertices.map(v => [v.x, v.y]), 400 + k * 10 + i, { fill: p.def.colors[i] || p.def.colors[0], width: 3, amp: 1.1, shade: true }); });
+  const ltf = { x: tf.x, y: tf.y, a: tf.a }, o = p.off;
+  const L = (pts, w = 2.2) => sketch(toWorld(ltf, pts.map(([x, y]) => [x + o.x, y + o.y])), 450 + k * 13 + pts.length, { closed: false, width: w, amp: 0.8, twice: false });
+  const dot = (x, y, r) => { const [[px, py]] = toWorld(ltf, [[x + o.x, y + o.y]]); ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(px, py, r, 0, 6.3); ctx.fill(); };
+  const ring = (x, y, r, fill) => sketch(toWorld(ltf, circlePts(r, 12).map(([a, b]) => [a + x + o.x, b + y + o.y])), 470 + k, { fill: fill || null, width: 2, amp: 0.7, twice: false });
+  p.def.deco(L, dot, ring);
+}
 function drawView(v) {
-  PROP_SHAPES.forEach(([w, h, seed, kind], k) => drawShape(v.tf[11 + k], w, h, seed, kind));
-  for (const n of ORDER) { const [w, h, seed, kind] = SHAPES[n], tf = v.tf[PART_NAMES.indexOf(n)]; drawShape(tf, w, h, seed, kind); if (n === 'head') drawFace(tf, v.face); }
+  drawShadows(v);
+  const doll = (names) => names.forEach(n => { const [w, h, seed, kind] = SHAPES[n], tf = v.tf[PART_NAMES.indexOf(n)]; drawShape(tf, w, h, seed, kind); if (n === 'head') drawFace(tf, v.face); });
+  doll(BACK); props.forEach((p, k) => drawProp(p, v.tf[11 + k], k)); doll(FRONT);
   v.pins.forEach((p, k) => drawTack(p, 1, 90 + k));
 }
 function drawFace(tf, fc) {
@@ -315,73 +412,72 @@ function drawTack(p, alpha = 1, seed = 90) {
   sketch(circlePts(9, 9).map(([px, py]) => [p.x + px, p.y + py]), seed, { fill: RED, width: 2.4, amp: 0.8, twice: false });
   ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.beginPath(); ctx.arc(p.x - 3, p.y - 3, 2.4, 0, 6.3); ctx.fill(); ctx.globalAlpha = 1;
 }
-function drawOdaiCard() {
-  if (state === 'title' || state === 'choose') return;
-  const w = 520, x = SW / 2 - w / 2, y = 18, h = 92;
+function card(top, main) {
+  const w = 600, x = SW / 2 - w / 2, y = 16, h = 92;
   ctx.save(); ctx.translate(SW / 2, y + h / 2); ctx.rotate(-0.012); ctx.translate(-SW / 2, -(y + h / 2));
-  sketch([[x, y], [x + w / 2, y - 2], [x + w, y], [x + w + 2, y + h / 2], [x + w, y + h], [x + w / 2, y + h + 2], [x, y + h], [x - 2, y + h / 2]], 80, { fill: SKIN, width: 2.6, amp: 1 });
+  sketch([[x, y], [x + w / 2, y - 2], [x + w, y], [x + w + 2, y + h / 2], [x + w, y + h], [x + w / 2, y + h + 2], [x, y + h], [x - 2, y + h / 2]], 80, { fill: SKIN, width: 2.6, amp: 1, shade: true });
   ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  const hidden = (state === 'answer' && !reveal) || hideOdai;
-  ctx.font = '17px Yomogi, sans-serif'; ctx.fillText(hidden ? 'この動き、なんのお題？' : 'お題', SW / 2, y + 22);
-  let text = odai.t;
-  if (hidden) { // ヒント：時間がたつと文字数 → 1文字目
-    const el = state === 'answer' && timerOn ? ANSWER_SEC - timeLeft : 0;
-    const ch = [...text]; // 絵文字なども1文字として数える
-    text = el >= 16 ? ch[0] + '〇'.repeat(ch.length - 1) : el >= 8 ? '〇'.repeat(ch.length) : '？？？';
-  }
-  let fs = 40; ctx.font = `${fs}px Yomogi, sans-serif`;
-  while (ctx.measureText(text).width > w - 40 && fs > 18) { fs -= 2; ctx.font = `${fs}px Yomogi, sans-serif`; }
-  ctx.fillText(text, SW / 2, y + 60);
-  ctx.restore();
+  ctx.font = '17px Yomogi, sans-serif'; ctx.fillText(top, SW / 2, y + 22);
+  let fs = 36; ctx.font = `${fs}px Yomogi, sans-serif`;
+  while (ctx.measureText(main).width > w - 40 && fs > 16) { fs -= 2; ctx.font = `${fs}px Yomogi, sans-serif`; }
+  ctx.fillText(main, SW / 2, y + 60); ctx.restore();
+}
+const propNames = () => propIds.map(i => PROPS[i].name).join('・');
+function drawHud() {
+  if (state === 'title') return;
+  if (state === 'choose' || state === 'pose') card(`場面：${SCENES[scene][0]}　道具：${propNames()}`, state === 'pose' ? 'この道具で、物ボケしろ！' : '');
+  if (state === 'caption' || state === 'done') card(`場面：${SCENES[scene][0]}`, caption ? `「${caption}」` : 'タイトルをつけてね');
+  if (state === 'answer' || state === 'reply') card(`場面：${SCENES[scene][0]}　道具：${propNames()}`, reveal ? `ボケ：「${caption}」` : 'この物ボケに、ツッコめ！');
   ctx.font = '16px Yomogi, sans-serif'; ctx.fillStyle = '#6b655c'; ctx.textAlign = 'center';
-  if (state === 'pose') ctx.fillText(`つかんだ所に画びょう（あと${MAX_PINS - pins.length}本）。ポーズができたら「コマを撮る」`, SW / 2, y + h + 26);
-  if (frames.length > 1 && state !== 'pose') ctx.fillText(`コマ ${curFrame() + 1} / ${frames.length}`, SW / 2, y + h + 26);
-}
-function drawTimer() {
-  if (!timerOn) return;
-  const x = 905, y = 70, r = 46, total = state === 'answer' ? ANSWER_SEC : POSE_SEC, f = Math.max(0, timeLeft / total);
-  sketch(circlePts(r, 16).map(([a, b]) => [x + a, y + b]), 85, { fill: SKIN, width: 2.6, amp: 1 });
-  ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, r - 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f); ctx.closePath();
-  ctx.fillStyle = timeLeft < 5 ? 'rgba(216,67,46,0.25)' : 'rgba(38,34,29,0.08)'; ctx.fill();
-  ctx.fillStyle = timeLeft < 5 ? RED : INK; ctx.font = '40px Yomogi, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(Math.ceil(timeLeft), x, y + 2);
-}
-function drawFilmstrip() { // 撮ったコマの数（左上）
-  if (state !== 'pose') return;
-  ctx.font = '18px Yomogi, sans-serif'; ctx.fillStyle = INK; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.fillText('コマ', 40, 40);
-  for (let k = 0; k < MAX_FRAMES; k++) {
-    const x = 90 + k * 34, y = 28;
-    sketch([[x, y], [x + 1, y], [x + 25, y], [x + 26, y], [x + 26, y + 1], [x + 26, y + 23], [x + 26, y + 24], [x + 25, y + 24], [x + 1, y + 24], [x, y + 24], [x, y + 23], [x, y + 1]],
-      300 + k, { fill: k < frames.length ? INK : SKIN, width: 2, amp: 0.6, twice: false });
+  if (state === 'pose') ctx.fillText(`道具を人形に押し当てて離すと持たせられる・画びょう あと${MAX_PINS - pins.length}本`, SW / 2, 134);
+  if (frames.length > 1 && state !== 'pose') ctx.fillText(`コマ ${curFrame() + 1} / ${frames.length}`, SW / 2, 134);
+  if (timerOn) {
+    const x = 930, y = 66, r = 44, total = state === 'answer' ? ANSWER_SEC : POSE_SEC, f = Math.max(0, timeLeft / total);
+    sketch(circlePts(r, 16).map(([a, b]) => [x + a, y + b]), 85, { fill: SKIN, width: 2.6, amp: 1 });
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, r - 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f); ctx.closePath();
+    ctx.fillStyle = timeLeft < 5 ? 'rgba(216,67,46,0.25)' : 'rgba(38,34,29,0.08)'; ctx.fill();
+    ctx.fillStyle = timeLeft < 5 ? RED : INK; ctx.font = '38px Yomogi, sans-serif'; ctx.textBaseline = 'middle'; ctx.fillText(Math.ceil(timeLeft), x, y + 2);
   }
+  if (state === 'pose') { // コマ
+    ctx.font = '18px Yomogi, sans-serif'; ctx.fillStyle = INK; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText('コマ', 18, 168);
+    for (let k = 0; k < MAX_FRAMES; k++) { const x = 64 + k * 32, y = 156;
+      sketch([[x, y], [x + 24, y], [x + 24, y + 22], [x, y + 22]].flatMap((p, i, a) => [p, [(p[0] + a[(i + 1) % 4][0]) / 2 + 0.01, (p[1] + a[(i + 1) % 4][1]) / 2]]), 300 + k,
+        { fill: k < frames.length ? INK : SKIN, width: 2, amp: 0.5, twice: false }); }
+  }
+  if (tsukkomi && (state === 'answer' || state === 'reply') && reveal) bubble(tsukkomi);
+  if (rating >= 0 && (state === 'answer' || state === 'reply')) stamp(RATINGS[rating][0]);
+}
+function bubble(text) { // ツッコミの吹き出し
+  const lines = []; let cur = ''; for (const ch of text) { cur += ch; if ([...cur].length >= 11) { lines.push(cur); cur = ''; } } if (cur) lines.push(cur);
+  const w = 300, h = 34 + lines.length * 34, x = 40, y = 190;
+  sketch([[x, y], [x + w, y], [x + w, y + h], [x + w * 0.55, y + h], [x + w * 0.7, y + h + 34], [x + w * 0.4, y + h], [x, y + h]].flatMap((p, i, a) => i === 3 || i === 4 || i === 5 ? [p] : [p, [(p[0] + a[(i + 1) % a.length][0]) / 2 + 0.01, (p[1] + a[(i + 1) % a.length][1]) / 2]]),
+    600, { fill: SKIN, width: 2.8, amp: 1.2, shade: true });
+  ctx.fillStyle = INK; ctx.font = '28px Yomogi, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  lines.forEach((l, i) => ctx.fillText(l, x + w / 2, y + 34 + i * 34));
+  ctx.font = '15px Yomogi, sans-serif'; ctx.fillStyle = '#6b655c'; ctx.fillText('ツッコミ', x + 44, y + 12);
+}
+function stamp(text) {
+  ctx.save(); ctx.translate(820, 300); ctx.rotate(-0.18);
+  sketch(circlePts(70, 18), 610, { fill: 'rgba(216,67,46,0.08)', width: 4, amp: 2, color: RED });
+  ctx.fillStyle = RED; ctx.font = `${text.length > 3 ? 30 : 36}px Yomogi, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 0, 2);
+  ctx.restore();
 }
 const curFrame = () => frames.length ? Math.floor((performance.now() - playStart) / FRAME_MS) % frames.length : 0;
 function draw() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = ctx.createPattern(grain, 'repeat'); ctx.fillRect(0, 0, W, H);
   ctx.setTransform(DPR * s, 0, 0, DPR * s, DPR * ox, DPR * oy);
-  drawRoom();
-  if (state === 'pose' || state === 'title' || state === 'choose') {
-    if (state === 'pose' && frames.length) { ctx.globalAlpha = 0.18; drawView(frames[frames.length - 1]); ctx.globalAlpha = 1; } // 前のコマを薄く
-    drawView(liveView());
+  drawScene();
+  const live = state === 'pose' || state === 'title' || state === 'choose';
+  if (live) {
+    const v = liveView(); // 前のコマを描くと道具が動くので、先に今の位置を控えておく
+    if (state === 'pose' && frames.length) { ctx.globalAlpha = 0.2; drawView(frames[frames.length - 1]); ctx.globalAlpha = 1; }
+    drawView(v);
     if (drag && !drag.body.isProp) { const bp = drag.body.position, o = drag.c.pointB; drawTack({ x: bp.x + o.x, y: bp.y + o.y }, 0.5); }
   } else if (frames.length) drawView(frames[curFrame()]);
-  drawOdaiCard(); drawTimer(); drawFilmstrip();
-  if (flash > 0) { ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = `rgba(255,255,255,${flash})`; ctx.fillRect(0, 0, W, H); }
-}
-
-// ---------- 答え合わせ ----------
-function norm(t) {
-  return String(t).normalize('NFKC').toLowerCase().replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))
-    .replace(/[\s!?！？、。・,.「」~〜]/g, '');
-}
-function isRight(guess, o = odai) {
-  const g = norm(guess); if (!g) return false;
-  const preset = ODAI.find(x => norm(x[0]) === norm(o.t)); // 用意したお題と同じなら、その言い換えも使う
-  const cands = [o.t, ...o.alts, ...(preset ? preset[1].split(',').filter(Boolean) : [])].map(norm).filter(Boolean);
-  return cands.some(c => g === c || g.includes(c) || (c.includes(g) && [...g].length >= Math.max(2, Math.ceil([...c].length * 0.6))));
+  drawHud();
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = ctx.createPattern(grain, 'repeat'); ctx.fillRect(0, 0, W, H);
+  if (flash > 0) { ctx.fillStyle = `rgba(255,255,255,${flash})`; ctx.fillRect(0, 0, W, H); }
 }
 
 // ---------- 画面の流れ ----------
@@ -390,45 +486,38 @@ const $ = (sel) => document.querySelector(sel);
 function showPanel(html) { panel.innerHTML = html; panel.style.display = 'block'; }
 function hidePanel() { panel.style.display = 'none'; }
 function setBar(html) { bar.innerHTML = html; layout(); }
+const xIntent = (text, url) => window.open('https://twitter.com/intent/tweet?' + new URLSearchParams({ text, url }).toString(), '_blank', 'noopener');
+function drawLots() { scene = Math.floor(Math.random() * SCENES.length); const ids = []; while (ids.length < 3) { const k = Math.floor(Math.random() * PROPS.length); if (!ids.includes(k)) ids.push(k); } propIds = ids; }
 
 function goTitle() {
-  state = 'title'; timerOn = false; reveal = false; frames = []; face = 'happy'; buildWorld();
+  state = 'title'; timerOn = false; frames = []; face = 'happy'; scene = 0; propIds = [12, 0, 4]; buildWorld();
   history.replaceState(null, '', location.pathname);
-  showPanel(`<h1>なんのポーズ？</h1>
-    <p class="sub">ぐにゃぐにゃ人形をコマ撮りで動かして、お題を伝える。<br>作った動きはリンクで友達に出題できる。</p>
-    <div class="row"><button class="btn red" id="go">出題する</button></div>
-    <p class="sub" style="margin-top:12px">${POSE_SEC}秒で最大${MAX_FRAMES}コマ → 相手は${ANSWER_SEC}秒以内に一言で当てる</p>
+  showPanel(`<h1>物ボケ人形</h1>
+    <p class="sub">ぐにゃぐにゃ人形と、ひいた道具で物ボケ。<br>リンクを送れば、友達がツッコんでくれる。</p>
+    <div class="row"><button class="btn red" id="go">ボケる</button></div>
+    <p class="sub" style="margin-top:12px">${POSE_SEC}秒で最大${MAX_FRAMES}コマ → タイトルをつける → 友達が${ANSWER_SEC}秒でツッコむ</p>
     <a class="home" href="../">← BLOCKYCLAW</a>`);
   setBar(''); $('#go').onclick = goChoose;
 }
 function goChoose() {
-  state = 'choose'; frames = []; face = 'normal'; buildWorld(); timerOn = false;
+  state = 'choose'; frames = []; face = 'normal'; caption = ''; tsukkomi = ''; rating = -1; reveal = false; timerOn = false; reroll = 1;
   history.replaceState(null, '', location.pathname);
-  const picks = []; while (picks.length < 3) { const k = Math.floor(Math.random() * ODAI.length); if (!picks.includes(k)) picks.push(k); }
-  showPanel(`<p class="big">お題を書く</p>
-    <form id="of" style="display:grid;gap:8px;margin-top:8px">
-      <input class="guess" id="ot" maxlength="20" autocomplete="off" placeholder="例：寝起きのライオン" style="width:auto">
-      <input class="guess" id="oa" maxlength="40" autocomplete="off" placeholder="別の言い方（なくてもOK）例：ライオン,らいおん" style="width:auto;font-size:15px">
-      <button class="btn red">これでスタート（${POSE_SEC}秒）</button>
-    </form>
-    <p class="sub" style="margin-top:10px">思いつかないときは：</p>
-    <div class="row" style="margin-top:4px">${picks.map(k => `<button class="btn" style="font-size:15px;padding:4px 10px" data-k="${k}">${esc(ODAI[k][0])}</button>`).join('')}</div>`);
-  setBar('');
-  panel.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { $('#ot').value = ODAI[Number(b.dataset.k)][0]; $('#ot').focus(); });
-  $('#of').onsubmit = (e) => {
-    e.preventDefault();
-    const t = $('#ot').value.trim(); if (!t) { $('#ot').focus(); return; }
-    goPose({ t, alts: $('#oa').value.split(/[,、，]/).map(x => x.trim()).filter(Boolean) });
-  };
-  $('#ot').focus();
+  drawLots(); buildWorld(); renderChoose();
 }
-function goPose(o) {
-  state = 'pose'; odai = o; timeLeft = POSE_SEC; timerOn = true; frames = []; hidePanel();
+function renderChoose() {
+  showPanel(`<p class="sub">場面</p><p class="big">${esc(SCENES[scene][0])}</p>
+    <p class="sub" style="margin-top:8px">道具</p><p class="big">${propIds.map(i => esc(PROPS[i].name)).join('・')}</p>
+    <div class="row"><button class="btn red" id="start">これでボケる（${POSE_SEC}秒）</button><button class="btn" id="re" ${reroll ? '' : 'disabled'}>ひきなおす（${reroll}回）</button></div>`);
+  setBar('');
+  $('#start').onclick = goPose;
+  $('#re').onclick = () => { if (!reroll) return; reroll--; drawLots(); buildWorld(); renderChoose(); };
+}
+function goPose() {
+  state = 'pose'; timeLeft = POSE_SEC; timerOn = true; frames = []; hidePanel();
   setBar(`<div class="row faces">${FACES.map(([f, n]) => `<button class="btn ${f === face ? 'on' : ''}" data-f="${f}">${n}</button>`).join('')}</div>
     <div class="row"><button class="btn red" id="shot">コマを撮る（0/${MAX_FRAMES}）</button><button class="btn" id="done" disabled>できた！</button><button class="btn" id="unpin">画びょう全部ぬく</button></div>`);
   bar.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { face = b.dataset.f; bar.querySelectorAll('[data-f]').forEach(x => x.classList.toggle('on', x.dataset.f === face)); });
-  $('#shot').onclick = shoot; $('#done').onclick = finishPose;
-  $('#unpin').onclick = () => pins.slice().forEach(removePin);
+  $('#shot').onclick = shoot; $('#done').onclick = finishPose; $('#unpin').onclick = () => pins.slice().forEach(removePin);
 }
 function shoot() {
   if (state !== 'pose' || frames.length >= MAX_FRAMES) return;
@@ -438,53 +527,58 @@ function shoot() {
 }
 function finishPose() {
   if (state !== 'pose') return;
-  if (!frames.length) frames.push(snapshot()); // 1コマも撮らずに時間切れ → 今の形を1コマに
-  timerOn = false; drag = null; state = 'done'; playStart = performance.now();
-  const link = GAME_URL + '#p=' + encodeFrames();
-  setBar(`<div class="row"><button class="btn red" id="xq">𝕏で出題する</button><button class="btn" id="local">この端末で友達に出す</button></div>
-    <div class="row"><button class="btn" id="copy">リンクをコピー</button><button class="btn" id="again">もう一回</button></div>`);
-  $('#xq').onclick = () => {
-    const q = new URLSearchParams({ text: `この動き、なんのお題？🤸\n${ANSWER_SEC}秒で当てられる？\n#なんのポーズ`, url: link });
-    window.open('https://twitter.com/intent/tweet?' + q.toString(), '_blank', 'noopener');
-  };
+  if (!frames.length) frames.push(snapshot());
+  timerOn = false; drag = null; state = 'caption'; playStart = performance.now();
+  setBar(`<form class="row" id="cf"><input class="inp" id="ci" maxlength="24" autocomplete="off" placeholder="ボケのタイトル（例：傘でゴルフする部長）"><button class="btn red">決定</button></form>`);
+  $('#ci').oninput = () => { caption = $('#ci').value.trim(); };
+  $('#cf').onsubmit = (e) => { e.preventDefault(); caption = $('#ci').value.trim(); if (!caption) { $('#ci').focus(); return; } goDone(); };
+  $('#ci').focus();
+}
+function goDone() {
+  state = 'done';
+  const link = GAME_URL + '#p=' + encodeBoke();
+  setBar(`<div class="row"><button class="btn red" id="xq">𝕏でツッコミ募集</button><button class="btn" id="local">この端末で友達に見せる</button></div>
+    <div class="row"><button class="btn" id="copy">リンクをコピー</button><button class="btn" id="again">もう一回ボケる</button></div>`);
+  $('#xq').onclick = () => xIntent(`【物ボケ人形】場面：${SCENES[scene][0]}　道具：${propNames()}\nこの物ボケに、ツッコんでください🙏\n#物ボケ人形`, link);
   $('#copy').onclick = async () => { try { await navigator.clipboard.writeText(link); $('#copy').textContent = 'コピーした！'; } catch { prompt('このリンクを送ってね', link); } };
   $('#local').onclick = () => goAnswerIntro(true);
   $('#again').onclick = goChoose;
 }
 function goAnswerIntro(local) {
-  state = 'answer'; reveal = false; timerOn = false; timeLeft = ANSWER_SEC; tries = []; setBar('');
-  showPanel(`<p class="big">${local ? '友達にわたしてね' : 'この動き、なんのお題？'}</p>
-    <p class="sub">${frames.length}コマのパラパラ漫画を見て、${ANSWER_SEC}秒以内に一言で答える。<br>何回答えてもOK。時間がたつとヒントが出る。</p>
-    <div class="row"><button class="btn red" id="start">スタート</button></div>
-    ${local ? '' : '<p class="sub" style="margin-top:10px"><a class="home" href="#" id="mine">答えずに自分も出題する</a></p>'}`);
-  $('#start').onclick = startAnswer;
+  state = 'answer'; reveal = false; timerOn = false; tsukkomi = ''; rating = -1; answerDone = false; setBar(''); playStart = performance.now();
+  showPanel(`<p class="big">${local ? '友達にわたしてね' : 'ツッコミ募集中！'}</p>
+    <p class="sub">場面：${esc(SCENES[scene][0])}　道具：${esc(propNames())}<br>${frames.length}コマの物ボケを見て、${ANSWER_SEC}秒でツッコミを書く。<br>そのあと、ボケのタイトルが明かされる。</p>
+    <div class="row"><button class="btn red" id="st">見る</button></div>
+    ${local ? '' : '<p class="sub" style="margin-top:10px"><a class="home" href="#" id="mine">自分もボケる</a></p>'}`);
+  $('#st').onclick = startAnswer;
   if (!local) $('#mine').onclick = (e) => { e.preventDefault(); goChoose(); };
 }
 function startAnswer() {
-  hidePanel(); answerDone = false; playStart = performance.now();
-  setBar(`<div class="tries" id="tries"></div>
-    <form class="row" id="f"><input class="guess" id="g" autocomplete="off" placeholder="一言で答える"><button class="btn red">答える</button></form>`);
-  $('#f').onsubmit = (e) => { e.preventDefault(); const v = $('#g').value.trim(); if (!v) return; $('#g').value = ''; guess(v); };
-  $('#g').focus();
-  timeLeft = ANSWER_SEC; timerOn = true; answerStartAt = performance.now();
+  hidePanel(); playStart = performance.now();
+  setBar(`<form class="row" id="tf"><input class="inp" id="ti" maxlength="30" autocomplete="off" placeholder="ツッコミを書く（例：それ傘や！）"><button class="btn red">ツッコむ</button></form>`);
+  $('#tf').onsubmit = (e) => { e.preventDefault(); const v = $('#ti').value.trim(); if (!v) return; submitTsukkomi(v); };
+  $('#ti').focus();
+  timeLeft = ANSWER_SEC; timerOn = true;
 }
-function guess(v) {
-  if (answerDone) return;
-  if (isRight(v)) return endAnswer(true);
-  tries.push(v); $('#tries').innerHTML = tries.slice(-5).map(t => `<s>${esc(t)}</s>`).join('');
+function submitTsukkomi(v) {
+  if (answerDone) return; answerDone = true; timerOn = false; tsukkomi = v || '……（言葉が出ない）'; reveal = true; flash = 0.4;
+  setBar(`<div class="msg">ボケのタイトルは「${esc(caption)}」。どうだった？</div>
+    <div class="row">${RATINGS.map(([n, e], i) => `<button class="btn" data-r="${i}">${e} ${n}</button>`).join('')}</div>`);
+  bar.querySelectorAll('[data-r]').forEach(b => b.onclick = () => rate(Number(b.dataset.r)));
 }
-function endAnswer(ok) {
-  if (answerDone) return; answerDone = true; timerOn = false; reveal = true;
-  const t = (performance.now() - answerStartAt) / 1000;
-  const rank = !ok ? '' : t < 5 ? '以心伝心' : t < 12 ? 'なかなかの読み' : 'ギリギリ伝わった';
-  const msg = ok ? `正解！ ${t.toFixed(1)}秒` : `時間切れ！ 正解は「${esc(odai.t)}」`;
-  const shareText = ok ? `「なんのポーズ？」に${t.toFixed(1)}秒で正解した！【${rank}】\nあなたも当ててみて👇\n#なんのポーズ`
-    : `「なんのポーズ？」わからなかった…\nあなたは当てられる？👇\n#なんのポーズ`;
-  const link = GAME_URL + '#p=' + encodeFrames();
-  setBar(`<div class="row" style="font-size:24px;align-items:baseline;gap:12px">${msg}${rank ? `<span style="font-size:18px">【${rank}】</span>` : ''}</div>
-    <div class="row"><button class="btn red" id="mine">自分も出題する</button><button class="btn" id="xs">𝕏で言う</button></div>`);
+function rate(r) {
+  rating = r; flash = 0.3;
+  const back = GAME_URL + '#p=' + encodeBoke() + '&r=' + scramble(tsukkomi) + '~' + r;
+  const link = GAME_URL + '#p=' + encodeBoke();
+  setBar(`<div class="row"><button class="btn red" id="ret">ボケた人にツッコミを返す</button><button class="btn" id="xs">𝕏で言う</button><button class="btn" id="mine">自分もボケる</button></div>`);
+  $('#ret').onclick = async () => { try { await navigator.clipboard.writeText(back); $('#ret').textContent = 'リンクをコピーした！ 送ってね'; } catch { prompt('このリンクをボケた人に送ってね', back); } };
+  $('#xs').onclick = () => xIntent(`【物ボケ人形】ボケ「${caption}」\nわたしのツッコミ：「${tsukkomi}」→ ${RATINGS[r][1]}${RATINGS[r][0]}\n#物ボケ人形`, link);
   $('#mine').onclick = goChoose;
-  $('#xs').onclick = () => { const q = new URLSearchParams({ text: shareText, url: link }); window.open('https://twitter.com/intent/tweet?' + q.toString(), '_blank', 'noopener'); };
+}
+function goReply(rp) {
+  state = 'reply'; reveal = true; tsukkomi = rp.tsukkomi; rating = RATINGS[rp.rating] ? rp.rating : -1; timerOn = false; playStart = performance.now();
+  setBar(`<div class="msg">あなたのボケに、ツッコミが届いた！</div><div class="row"><button class="btn red" id="mine">もう一回ボケる</button></div>`);
+  $('#mine').onclick = goChoose;
 }
 
 // ---------- ループ ----------
@@ -495,7 +589,7 @@ function loop(t) {
   boil = Math.floor(t / 130); flash = Math.max(0, flash - dt / 250);
   if (timerOn) {
     timeLeft -= dt / 1000;
-    if (timeLeft <= 0) { timeLeft = 0; if (state === 'pose') finishPose(); else if (state === 'answer') endAnswer(false); }
+    if (timeLeft <= 0) { timeLeft = 0; if (state === 'pose') finishPose(); else if (state === 'answer') submitTsukkomi(($('#ti') && $('#ti').value.trim()) || ''); }
   }
   draw(); requestAnimationFrame(loop);
 }
@@ -509,12 +603,17 @@ addEventListener('resize', layout);
 function start() {
   if (!innerWidth || !innerHeight) { setTimeout(start, 100); return; }
   makeGrain(); layout();
-  const m = location.hash.match(/#p=([A-Za-z0-9_.~\-]+)/), d = m && decodeFrames(m[1]);
-  if (d) { buildWorld(); odai = d.odai; frames = d.frames; goAnswerIntro(false); } else goTitle();
+  const hp = new URLSearchParams(location.hash.slice(1)), d = hp.get('p') && decodeBoke(hp.get('p'));
+  if (d) {
+    caption = d.caption; scene = d.scene; propIds = d.propIds; frames = d.frames; buildWorld();
+    const rp = hp.get('r') && decodeReply(hp.get('r'));
+    if (rp) goReply(rp); else goAnswerIntro(false);
+  } else goTitle();
   last = performance.now(); requestAnimationFrame(loop);
 }
 start();
-window.__pose = { get frames() { return frames; }, get state() { return state; }, encodeFrames, decodeFrames, isRight, get parts() { return parts; }, shoot, finishPose };
+window.__boke = { get state() { return state; }, get frames() { return frames; }, get props() { return props; }, get parts() { return parts; }, get grips() { return grips; },
+  shoot, finishPose, encodeBoke, decodeBoke, goPose, scramble, setScene: (sc, ids) => { scene = sc; propIds = ids; buildWorld(); } };
 </script>
 </body>
 </html>
