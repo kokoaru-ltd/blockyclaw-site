@@ -50,7 +50,7 @@
 const { Engine, Bodies, Body, Composite, Constraint, Query } = Matter;
 const INK = '#26221d', PAPER = '#f3eee2', SKIN = '#fffdf6', FAR = '#e4ded1', RED = '#d8432e';
 const SW = 1000, SH = 720, FLOOR = 650, HORIZON = 500;
-const MAX_PINS = 6, PREP_SEC = 30, REC_SEC = 3, REC_FPS = 10, ANSWER_SEC = 30;
+const MAX_PINS = 6, PREP_SEC = 60, REC_SEC = 5, REC_FPS = 10, ANSWER_SEC = 30;
 const GAME_URL = 'https://kokoaru-ltd.github.io/blockyclaw-site/nannopose/';
 const FACES = [['normal','ふつう'],['happy','にこにこ'],['sad','かなしい'],['angry','おこ'],['surprise','びっくり'],['sleepy','ねむい'],['pain','いたい'],['dead','×_×']];
 const FACINGS = [['front', '正面', 1, 0], ['quarter', 'ななめ', 0.8, 1], ['side', '横', 0.6, 2]]; // 名前, 表示, 胴の幅, 顔の寄せ
@@ -60,6 +60,17 @@ const SHAPES = { head: [72, 72, 1, 'round'], chest: [62, 74, 2], pelvis: [56, 44
 const LIMBS_L = ['thL', 'shL', 'uaL', 'faL'], LIMBS_R = ['thR', 'shR', 'uaR', 'faR'];
 const SCENES = [['部屋', 'room'], ['駅のホーム', 'station'], ['浜辺', 'beach'], ['結婚式', 'wedding']];
 const RATINGS = [['大爆笑', '😂'], ['ふふっ', '😏'], ['すべった', '😐']];
+// 役（主体とのズレを作る）
+const ROLES = ['大河ドラマの主役', 'ラスボス', '結婚式の新郎', '校長先生', 'ニュースキャスター', '総理大臣', '魔法使い', 'カリスマ美容師', '名探偵',
+  '宇宙飛行士', '演歌歌手', 'パティシエ', 'ボクサー', '執事', '忍者', '正義のヒーロー', '保育士', '寿司職人', '占い師', 'ロックスター',
+  'スーパーの店長', 'お天気お姉さん', '王様', '新人アイドル', '面接官'];
+// 道具ごとに「いちばん似合わない使い道」だけを用意する（形が似ている使い方はズレが小さいので入れない）
+const USES = {
+  umbrella: ['マイク', 'ハンバーガー', 'メガネ', '電話'], fish: ['ギター', 'ネクタイ', 'バット', '電話'], banana: ['ハンドル', '王冠', '枕', 'ボウリングの球'],
+  cone: ['ギター', '枕', 'スマホ', '財布'], broom: ['メガネ', '帽子', '電話', 'ネックレス'], pan: ['ネクタイ', '枕', '双眼鏡', '帽子'],
+  ladder: ['ネックレス', '電話', 'フルート', '財布'], boot: ['花束', '剣', 'マイク', 'ハンバーガー'], box: ['剣', 'ネクタイ', '花束', 'マイク'],
+  ball: ['剣', 'ネクタイ', 'バット', 'ペン'], plunger: ['花束', '王冠', 'ネックレス', 'ギター'], tire: ['剣', 'ネクタイ', 'ペン', 'バット'],
+  chicken: ['剣', '花束', '電話', 'ペン'], fan: ['花束', 'ネクタイ', 'ハンバーガー', '剣'] };
 
 // ---------- 道具 ----------
 const R = (x, y, w, h, r = 0) => Bodies.rectangle(x, y, w, h, r ? { chamfer: { radius: r } } : {});
@@ -101,6 +112,11 @@ const panel = document.getElementById('panel'), bar = document.getElementById('b
 let W, H, DPR, s = 1, ox = 0, oy = 0;
 let engine, parts = [], props = [], pins = [], grips = [], drag = null, grain;
 let state = 'title', scene = 0, propIds = [0, 1, 2], caption = '', face = 'normal', facing = 0, dir = 1;
+let roleIdx = 0, mainK = 0, useIdx = 0; // お題：役・主役の道具（3つのうちどれか）・使い道
+let hoverBody = null, undoStack = [];
+const roleName = () => ROLES[roleIdx];
+const mainProp = () => PROPS[propIds[mainK]];
+const odaiText = () => `${mainProp().name}を「${USES[mainProp().id][useIdx]}」として使え`;
 let timeLeft = 0, timerOn = false, flash = 0, reroll = 1;
 let rec = null, prepSave = null, recStart = 0, countStart = 0, playStart = 0, cam = 1;
 let tsukkomi = '', rating = -1, reveal = false, answerDone = false;
@@ -232,13 +248,14 @@ function encodeBoke() {
     const vals = sm.tf.flatMap(t => [t.x, t.y, Math.round(t.a * 100)]);
     vals.forEach((v, k) => putV(out, zz(prev ? v - prev[k] : v))); prev = vals;
   }
-  return ['5', scramble(caption), [scene, ...propIds, facing, dir > 0 ? 1 : 0].join('.'), b64e(Uint8Array.from(out))].join('~');
+  return ['6', scramble(caption), [scene, ...propIds, facing, dir > 0 ? 1 : 0, roleIdx, mainK, useIdx].join('.'), b64e(Uint8Array.from(out))].join('~');
 }
 function decodeBoke(str) {
   try {
-    const [v, cap, meta, data] = str.split('~'); if (v !== '5') return null;
-    const m = meta.split('.').map(Number); const [sc, a1, a2, a3, fc, dr] = m;
-    if (!SCENES[sc] || [a1, a2, a3].some(i => !PROPS[i]) || !FACINGS[fc]) return null;
+    const [v, cap, meta, data] = str.split('~'); if (v !== '6') return null;
+    const m = meta.split('.').map(Number); const [sc, a1, a2, a3, fc, dr, ro, mk, us] = m;
+    if (!SCENES[sc] || [a1, a2, a3].some(i => !PROPS[i]) || !FACINGS[fc] || !ROLES[ro] || !(mk >= 0 && mk < 3)) return null;
+    if (!USES[PROPS[[a1, a2, a3][mk]].id][us]) return null;
     const buf = b64d(data), st = { i: 0 };
     const n = getV(buf, st); if (n < 2 || n > 60) return null;
     const faces = []; for (let k = 0; k < n; k++) faces.push(getV(buf, st));
@@ -250,7 +267,7 @@ function decodeBoke(str) {
       const tf = []; for (let j = 0; j < 14; j++) tf.push({ x: vals[j * 3], y: vals[j * 3 + 1], a: vals[j * 3 + 2] / 100 });
       samples.push({ tf, face: faces[k] });
     }
-    return { caption: unscramble(cap), scene: sc, propIds: [a1, a2, a3], facing: fc, dir: dr ? 1 : -1, rec: { samples, pins: pinsArr } };
+    return { caption: unscramble(cap), scene: sc, propIds: [a1, a2, a3], facing: fc, dir: dr ? 1 : -1, roleIdx: ro, mainK: mk, useIdx: us, rec: { samples, pins: pinsArr } };
   } catch { return null; }
 }
 const decodeReply = (str) => { try { const [t, r] = str.split('~'); return { tsukkomi: unscramble(t), rating: Number(r) }; } catch { return null; } };
@@ -280,9 +297,12 @@ function distToBody(b, m) {
 function pick(m) {
   const order = drawOrder(); const dollFront = [...order.near, ...order.mid, ...order.far].map(n => parts.find(p => p.name === n));
   const all = [...order.near.map(n => parts.find(p => p.name === n)), ...props, ...[...order.mid, ...order.far].map(n => parts.find(p => p.name === n))];
-  for (const p of dollFront) if (SHAPES[p.name][3] === 'hand' || SHAPES[p.name][3] === 'foot') { const e = endPoint(p.name, tfOf(p.body)); if (Math.hypot(e.x - m.x, e.y - m.y) < 20) return p.body; }
+  // 手足の先は広めに、それ以外は「ちゃんと触れている所」だけつかむ（意図しない所をつかまないように）
+  let bestEnd = null, be = 30;
+  for (const p of dollFront) if (SHAPES[p.name][3] === 'hand' || SHAPES[p.name][3] === 'foot') { const e = endPoint(p.name, tfOf(p.body)), d = Math.hypot(e.x - m.x, e.y - m.y); if (d < be) { be = d; bestEnd = p.body; } }
+  if (bestEnd) return bestEnd;
   for (const p of all) if (Query.point([p.body], m).length) return p.body;
-  let best = null, bd = 24;
+  let best = null, bd = 14;
   for (const p of all) { const d = distToBody(p.body, m); if (d < bd) { bd = d; best = p.body; } }
   return best;
 }
@@ -301,11 +321,28 @@ cv.addEventListener('pointerdown', (e) => {
   const hit = pins.find(p => Math.hypot(p.pointA.x - m.x, p.pointA.y - m.y) < 16);
   if (hit) { const body = hit.bodyB, a = { ...hit.pointA }; removePin(hit); startDrag(body, a, m, e, true); return; }
   const body = pick(m); if (!body) return;
+  if (state === 'prep') { undoStack.push(savePrep()); if (undoStack.length > 15) undoStack.shift(); } // 「ひとつ戻す」用
   if (state === 'prep') pins.filter(p => p.bodyB === body).forEach(removePin); // 本番中は画びょうを残したまま引っぱれる
   if (body.isProp && state === 'prep') removeGrips(body);
   startDrag(body, m, m, e, false);
 });
-cv.addEventListener('pointermove', (e) => { if (!drag) return; const m = pos(e); drag.c.pointA = m; if (Math.hypot(m.x - drag.x0, m.y - drag.y0) > 6) drag.moved = true; });
+cv.addEventListener('pointermove', (e) => {
+  const m = pos(e);
+  if (!drag) { hoverBody = canTouch() ? pick(m) : null; cv.style.cursor = hoverBody ? 'grab' : 'default'; return; } // つかめる所を光らせる
+  drag.c.pointA = m; if (Math.hypot(m.x - drag.x0, m.y - drag.y0) > 6) drag.moved = true;
+});
+cv.addEventListener('pointerleave', () => { hoverBody = null; });
+function drawHighlight(b) { // つかむ（つかんでいる）部分を黄色く縁どる
+  const list = b.parts.length > 1 ? b.parts.slice(1) : [b];
+  ctx.save(); ctx.lineJoin = 'round';
+  for (const part of list) {
+    ctx.beginPath(); part.vertices.forEach((v, i) => i ? ctx.lineTo(v.x, v.y) : ctx.moveTo(v.x, v.y)); ctx.closePath();
+    ctx.fillStyle = 'rgba(255,205,60,0.28)'; ctx.fill(); ctx.strokeStyle = 'rgba(240,160,20,0.95)'; ctx.lineWidth = 5; ctx.stroke();
+  }
+  const pt = parts.find(p => p.body === b);
+  if (pt && SHAPES[pt.name][3]) { const e = endPoint(pt.name, tfOf(b)); ctx.beginPath(); ctx.arc(e.x, e.y, 17, 0, 6.3); ctx.strokeStyle = 'rgba(240,160,20,0.95)'; ctx.lineWidth = 5; ctx.stroke(); }
+  ctx.restore();
+}
 function release() {
   if (!drag) return;
   const { c, body, fromPin, moved, t0 } = drag; Composite.remove(engine.world, c); drag = null;
@@ -520,15 +557,14 @@ function timerDial(total) {
 }
 function drawHud() {
   if (state === 'title' || state === 'choose') return;
-  const scn = `場面：${SCENES[scene][0]}　道具：${propNames()}`;
-  if (state === 'prep') card(scn, '準備して、本番で3秒うごかせ！');
-  if (state === 'count') card(scn, '本番いくよ…');
-  if (state === 'rec') card(scn, 'うごかせ！');
-  if (state === 'review') card(scn, 'この動きでいい？');
-  if (state === 'caption' || state === 'done') card(`場面：${SCENES[scene][0]}`, caption ? `「${caption}」` : 'タイトルをつけてね');
-  if (state === 'answer' || state === 'reply') card(scn, reveal ? `ボケ：「${caption}」` : 'この物ボケに、ツッコめ！');
+  // お題（基準）はずっと見せる：役・場面・使い方
+  const scn = `役：${roleName()}　場面：${SCENES[scene][0]}`;
+  card(scn, odaiText());
   ctx.font = '16px Yomogi, sans-serif'; ctx.fillStyle = '#6b655c'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   if (state === 'prep') ctx.fillText(`ドラッグで動かす（離すとその形で止まる）・タップで画びょう あと${MAX_PINS - pins.length}本・道具は手に当てて離すと持つ`, SW / 2, 134);
+  if (state === 'count') ctx.fillText('本番いくよ…', SW / 2, 134);
+  if (state === 'review') ctx.fillText('この動きでいい？', SW / 2, 134);
+  if (caption && ['caption', 'done', 'answer', 'reply', 'gif'].includes(state)) serifu(caption);
   if (state === 'prep' || state === 'answer') if (timerOn) timerDial(state === 'answer' ? ANSWER_SEC : PREP_SEC);
   if (state === 'count') { const n = 3 - Math.floor((performance.now() - countStart) / 700);
     ctx.save(); ctx.font = '150px Yomogi, sans-serif'; ctx.fillStyle = RED; ctx.lineWidth = 10; ctx.strokeStyle = SKIN; ctx.textAlign = 'center';
@@ -538,8 +574,7 @@ function drawHud() {
     ctx.fillStyle = 'rgba(216,67,46,0.6)'; ctx.fillRect(SW / 2 - 200, 150, 400 * (1 - left / REC_SEC), 8); }
   if (tsukkomi && (state === 'answer' || state === 'reply') && reveal) bubble(tsukkomi);
   if (rating >= 0 && (state === 'answer' || state === 'reply')) stamp(RATINGS[rating][0]);
-  if (state === 'gif') { // GIF用：タイトル・（あれば）ツッコミとハンコ・ハッシュタグ
-    card(scn, `「${caption}」`);
+  if (state === 'gif') { // GIF用：お題・セリフ・（あれば）ツッコミとハンコ・ハッシュタグ
     if (gifRender.withT && tsukkomi) { bubble(tsukkomi); if (rating >= 0) stamp(RATINGS[rating][0]); }
     ctx.font = '26px Yomogi, sans-serif'; ctx.fillStyle = 'rgba(38,34,29,0.8)'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
     ctx.fillText('#物ボケ　物ボケ人形', SW - 24, SH - 26);
@@ -554,8 +589,17 @@ function bubble(text) {
   lines.forEach((l, i) => ctx.fillText(l, x + w / 2, y + 34 + i * 34));
   ctx.font = '15px Yomogi, sans-serif'; ctx.fillStyle = '#6b655c'; ctx.fillText('ツッコミ', x + 44, y + 12);
 }
+function serifu(text) { // 役のセリフ（人形の右上の吹き出し）
+  const lines = []; let cur = ''; for (const ch of text) { cur += ch; if ([...cur].length >= 12) { lines.push(cur); cur = ''; } } if (cur) lines.push(cur);
+  const w = 330, h = 30 + lines.length * 32, x = 630, y = 170;
+  sketch([[x, y], [x + w / 2, y], [x + w, y], [x + w, y + h / 2], [x + w, y + h], [x + w * 0.45, y + h], [x + w * 0.15, y + h + 40], [x + w * 0.28, y + h], [x, y + h], [x, y + h / 2]],
+    620, { fill: '#fff4d6', width: 2.8, amp: 1.2, shade: true });
+  ctx.fillStyle = INK; ctx.font = '26px Yomogi, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  lines.forEach((l, i) => ctx.fillText(l, x + w / 2, y + 32 + i * 32));
+  ctx.font = '15px Yomogi, sans-serif'; ctx.fillStyle = '#6b655c'; ctx.fillText('セリフ', x + 34, y + 12);
+}
 function stamp(text) {
-  ctx.save(); ctx.translate(820, 300); ctx.rotate(-0.18);
+  ctx.save(); ctx.translate(840, 470); ctx.rotate(-0.18);
   sketch(circlePts(70, 18), 610, { fill: 'rgba(216,67,46,0.08)', width: 4, amp: 2, color: RED });
   ctx.fillStyle = RED; ctx.font = `${text.length > 3 ? 30 : 36}px Yomogi, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 0, 2);
   ctx.restore();
@@ -581,7 +625,7 @@ function draw(tPlay) {
     const v = { tf: allBodies().map(tfOf), face: FACES.findIndex(f => f[0] === face) };
     drawView(v, true);
     if (state === 'rec') drawFx(v, liveHist, 0.1);
-    if (drag && !drag.body.isProp && state === 'prep') { const bp = drag.body.position, o = drag.c.pointB; drawTack({ x: bp.x + o.x, y: bp.y + o.y }, 0.5); }
+    if (canTouch() && (drag || hoverBody)) drawHighlight(drag ? drag.body : hoverBody);
   } else if (rec) {
     const t = tPlay ?? (performance.now() - playStart) / 1000, v = viewAt(t);
     drawView(v, false); drawFx(v, viewAt(Math.max(0, t - 0.1)), 0.1);
@@ -659,26 +703,32 @@ function showPanel(html) { panel.innerHTML = html; panel.style.display = 'block'
 function hidePanel() { panel.style.display = 'none'; }
 function setBar(html) { bar.innerHTML = html; layout(); }
 const xIntent = (text, url) => window.open('https://twitter.com/intent/tweet?' + new URLSearchParams({ text, url }).toString(), '_blank', 'noopener');
-function drawLots() { scene = Math.floor(Math.random() * SCENES.length); const ids = []; while (ids.length < 3) { const k = Math.floor(Math.random() * PROPS.length); if (!ids.includes(k)) ids.push(k); } propIds = ids; }
+function drawLots() {
+  scene = Math.floor(Math.random() * SCENES.length); const ids = []; while (ids.length < 3) { const k = Math.floor(Math.random() * PROPS.length); if (!ids.includes(k)) ids.push(k); } propIds = ids;
+  roleIdx = Math.floor(Math.random() * ROLES.length); mainK = Math.floor(Math.random() * 3);
+  useIdx = Math.floor(Math.random() * USES[PROPS[propIds[mainK]].id].length);
+}
 
 function goTitle() {
   state = 'title'; timerOn = false; rec = null; face = 'happy'; facing = 1; dir = 1; scene = 0; propIds = [12, 0, 4]; buildWorld();
   history.replaceState(null, '', location.pathname);
   showPanel(`<h1>物ボケ人形</h1>
-    <p class="sub">ぐにゃぐにゃ人形と、ひいた道具で物ボケ。<br>3秒の動きにして送れば、友達がツッコんでくれる。</p>
+    <p class="sub">役と、似合わない道具の使い方をひいて、ぐにゃぐにゃ人形で物ボケ。<br>送れば、友達がツッコんでくれる。</p>
     <div class="row"><button class="btn red" id="go">ボケる</button></div>
-    <p class="sub" style="margin-top:12px">準備${PREP_SEC}秒 → 本番${REC_SEC}秒 → タイトル → 友達が${ANSWER_SEC}秒でツッコむ</p>
+    <p class="sub" style="margin-top:12px">準備${PREP_SEC}秒 → 本番${REC_SEC}秒 → セリフ → 友達が${ANSWER_SEC}秒でツッコむ</p>
     <p class="sub"><a class="home" href="${HASH_URL}" target="_blank" rel="noopener">みんなの #物ボケ を見る</a>　<a class="home" href="../">← BLOCKYCLAW</a></p>`);
   setBar(''); $('#go').onclick = goChoose;
 }
 function goChoose() {
   state = 'choose'; rec = null; face = 'normal'; facing = 0; dir = 1; caption = ''; tsukkomi = ''; rating = -1; reveal = false; timerOn = false; reroll = 1;
-  history.replaceState(null, '', location.pathname);
+  history.replaceState(null, '', location.pathname); undoStack = [];
   drawLots(); buildWorld(); renderChoose();
 }
 function renderChoose() {
-  showPanel(`<p class="sub">場面</p><p class="big">${esc(SCENES[scene][0])}</p>
-    <p class="sub" style="margin-top:8px">道具</p><p class="big">${propIds.map(i => esc(PROPS[i].name)).join('・')}</p>
+  const others = propIds.filter((_, k) => k !== mainK).map(i => PROPS[i].name).join('・');
+  showPanel(`<p class="sub">あなたは</p><p class="big">${esc(roleName())}</p>
+    <p class="sub" style="margin-top:6px">お題</p><p class="big" style="font-size:23px">${esc(odaiText())}</p>
+    <p class="sub">場面：${esc(SCENES[scene][0])}　ほかの道具：${esc(others)}</p>
     <div class="row"><button class="btn red" id="start">これでボケる</button><button class="btn" id="re" ${reroll ? '' : 'disabled'}>ひきなおす（${reroll}回）</button></div>`);
   setBar('');
   $('#start').onclick = goPrep;
@@ -688,7 +738,8 @@ function goPrep() {
   state = 'prep'; timeLeft = PREP_SEC; timerOn = true; hidePanel(); rec = null;
   setBar(`<div class="row"><span class="lbl">向き</span>${FACINGS.map((f, i) => `<button class="btn sm ${i === facing ? 'on' : ''}" data-v="${i}">${f[1]}</button>`).join('')}<button class="btn sm" id="flip">${dir > 0 ? '→ 右向き' : '← 左向き'}</button></div>
     <div class="row"><span class="lbl">顔</span>${FACES.map(([f, n]) => `<button class="btn sm ${f === face ? 'on' : ''}" data-f="${f}">${n}</button>`).join('')}</div>
-    <div class="row"><button class="btn red" id="go">本番（${REC_SEC}秒うごかす）</button><button class="btn" id="unpin">画びょう全部ぬく</button></div>`);
+    <div class="row"><button class="btn red" id="go">本番（${REC_SEC}秒うごかす）</button><button class="btn" id="undo">ひとつ戻す</button><button class="btn" id="unpin">画びょう全部ぬく</button></div>`);
+  $('#undo').onclick = () => { if (undoStack.length) restorePrep(undoStack.pop()); };
   bindFaces();
   bar.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { facing = Number(b.dataset.v); bar.querySelectorAll('[data-v]').forEach(x => x.classList.toggle('on', Number(x.dataset.v) === facing)); });
   $('#flip').onclick = () => { dir = -dir; $('#flip').textContent = dir > 0 ? '→ 右向き' : '← 左向き'; };
@@ -713,9 +764,11 @@ function stopRec() {
 }
 function goCaption() {
   state = 'caption'; playStart = performance.now();
-  setBar(`<form class="row" id="cf"><input class="inp" id="ci" maxlength="24" autocomplete="off" placeholder="ボケのタイトル（例：傘でゴルフする部長）"><button class="btn red">決定</button></form>`);
+  setBar(`<div class="msg">${esc(roleName())}のセリフをひとこと（なくてもOK）</div>
+    <form class="row" id="cf"><input class="inp" id="ci" maxlength="24" autocomplete="off" placeholder="例：本日のニュースは以上です"><button class="btn red">決定</button><button class="btn" type="button" id="skip">セリフなし</button></form>`);
   $('#ci').oninput = () => { caption = $('#ci').value.trim(); };
-  $('#cf').onsubmit = (e) => { e.preventDefault(); caption = $('#ci').value.trim(); if (!caption) { $('#ci').focus(); return; } goDone(); };
+  $('#cf').onsubmit = (e) => { e.preventDefault(); caption = $('#ci').value.trim(); goDone(); };
+  $('#skip').onclick = () => { caption = ''; goDone(); };
   $('#ci').focus();
 }
 function goDone() {
@@ -725,7 +778,7 @@ function goDone() {
   setBar(`<div class="row"><button class="btn red" id="xq">𝕏にGIFで投稿 #物ボケ</button><button class="btn" id="local">この端末で友達に見せる</button></div>
     <div class="row"><button class="btn" id="copy">リンクをコピー</button><button class="btn" id="dl">GIFを保存</button><button class="btn" id="again">もう一回ボケる</button>
     <a class="home" href="${HASH_URL}" target="_blank" rel="noopener">みんなの #物ボケ</a></div>`);
-  $('#xq').onclick = () => postToX($('#xq'), gif, `【物ボケ】場面：${SCENES[scene][0]}　道具：${propNames()}\n「${caption}」\nこの物ボケにツッコんでくれ👇\n#物ボケ`, link);
+  $('#xq').onclick = () => postToX($('#xq'), gif, `【物ボケ】役：${roleName()}\nお題：${odaiText()}${caption ? `\n「${caption}」` : ''}\nこの物ボケにツッコんでくれ👇\n#物ボケ`, link);
   $('#dl').onclick = () => gif.then(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'monoboke.gif'; a.click(); });
   $('#copy').onclick = async () => { try { await navigator.clipboard.writeText(link); $('#copy').textContent = 'コピーした！'; } catch { prompt('このリンクを送ってね', link); } };
   $('#local').onclick = () => goAnswerIntro(true);
@@ -734,7 +787,8 @@ function goDone() {
 function goAnswerIntro(local) {
   state = 'answer'; reveal = false; timerOn = false; tsukkomi = ''; rating = -1; answerDone = false; setBar(''); playStart = performance.now();
   showPanel(`<p class="big">${local ? '友達にわたしてね' : 'ツッコミ募集中！'}</p>
-    <p class="sub">場面：${esc(SCENES[scene][0])}　道具：${esc(propNames())}<br>${REC_SEC}秒の物ボケを見て、${ANSWER_SEC}秒でツッコミを書く。<br>そのあと、ボケのタイトルが明かされる。</p>
+    <p class="sub">役：${esc(roleName())}</p><p>お題：${esc(odaiText())}</p>
+    <p class="sub">${REC_SEC}秒の物ボケを見て、${ANSWER_SEC}秒でツッコミを書く。</p>
     <div class="row"><button class="btn red" id="st">見る</button></div>
     ${local ? '' : '<p class="sub" style="margin-top:10px"><a class="home" href="#" id="mine">自分もボケる</a></p>'}`);
   $('#st').onclick = startAnswer;
@@ -749,7 +803,7 @@ function startAnswer() {
 }
 function submitTsukkomi(v) {
   if (answerDone) return; answerDone = true; timerOn = false; tsukkomi = v || '……（言葉が出ない）'; reveal = true; flash = 0.4;
-  setBar(`<div class="msg">ボケのタイトルは「${esc(caption)}」。どうだった？</div>
+  setBar(`<div class="msg">この物ボケ、どうだった？</div>
     <div class="row">${RATINGS.map(([n, e], i) => `<button class="btn" data-r="${i}">${e} ${n}</button>`).join('')}</div>`);
   bar.querySelectorAll('[data-r]').forEach(b => b.onclick = () => rate(Number(b.dataset.r)));
 }
@@ -760,7 +814,7 @@ function rate(r) {
   setBar(`<div class="row"><button class="btn red" id="xs">この物ボケを𝕏で紹介 #物ボケ</button><button class="btn" id="ret">ボケた人にツッコミを返す</button></div>
     <div class="row"><button class="btn" id="mine">自分もボケる</button><a class="home" href="${HASH_URL}" target="_blank" rel="noopener">みんなの #物ボケ</a></div>`);
   $('#ret').onclick = async () => { try { await navigator.clipboard.writeText(back); $('#ret').textContent = 'リンクをコピーした！ 送ってね'; } catch { prompt('このリンクをボケた人に送ってね', back); } };
-  $('#xs').onclick = () => postToX($('#xs'), gif, `【物ボケ】「${caption}」\nツッコミ：「${tsukkomi}」→ ${RATINGS[r][1]}${RATINGS[r][0]}\nあなたもツッコんで👇\n#物ボケ`, link);
+  $('#xs').onclick = () => postToX($('#xs'), gif, `【物ボケ】${roleName()}が、${odaiText().replace(/として使え$/, 'として使う')}\nツッコミ：「${tsukkomi}」→ ${RATINGS[r][1]}${RATINGS[r][0]}\nあなたもツッコんで👇\n#物ボケ`, link);
   $('#mine').onclick = goChoose;
 }
 function goReply(rp) {
@@ -768,7 +822,7 @@ function goReply(rp) {
   const link = GAME_URL + '#p=' + encodeBoke(), gif = makeGif(true);
   setBar(`<div class="msg">あなたのボケに、ツッコミが届いた！</div>
     <div class="row"><button class="btn red" id="xs">ツッコミ付きで𝕏に投稿 #物ボケ</button><button class="btn" id="mine">もう一回ボケる</button></div>`);
-  $('#xs').onclick = () => postToX($('#xs'), gif, `【物ボケ】「${caption}」\n届いたツッコミ：「${tsukkomi}」→ ${RATINGS[rating] ? RATINGS[rating][1] + RATINGS[rating][0] : ''}\n#物ボケ`, link);
+  $('#xs').onclick = () => postToX($('#xs'), gif, `【物ボケ】${roleName()}が、${odaiText().replace(/として使え$/, 'として使う')}\n届いたツッコミ：「${tsukkomi}」→ ${RATINGS[rating] ? RATINGS[rating][1] + RATINGS[rating][0] : ''}\n#物ボケ`, link);
   $('#mine').onclick = goChoose;
 }
 
@@ -883,7 +937,8 @@ function start() {
   makeGrain(); layout();
   const hp = new URLSearchParams(location.hash.slice(1)), d = hp.get('p') && decodeBoke(hp.get('p'));
   if (d) {
-    caption = d.caption; scene = d.scene; propIds = d.propIds; facing = d.facing; dir = d.dir; rec = d.rec; buildWorld();
+    caption = d.caption; scene = d.scene; propIds = d.propIds; facing = d.facing; dir = d.dir; rec = d.rec;
+    roleIdx = d.roleIdx; mainK = d.mainK; useIdx = d.useIdx; buildWorld();
     const rp = hp.get('r') && decodeReply(hp.get('r'));
     if (rp) goReply(rp); else goAnswerIntro(false);
   } else goTitle();
@@ -891,7 +946,7 @@ function start() {
 }
 start();
 window.__boke = { get state() { return state; }, get rec() { return rec; }, get props() { return props; }, get parts() { return parts; }, get grips() { return grips; },
-  encodeBoke, decodeBoke, scramble, goCount, stopRec, makeGif, get jointTargets() { return jointTargets; }, relAngle, setScene: (sc, ids) => { scene = sc; propIds = ids; buildWorld(); }, setFacing: (f, d) => { facing = f; dir = d; } };
+  encodeBoke, decodeBoke, scramble, goCount, stopRec, makeGif, setOdai: (r, k, u) => { roleIdx = r; mainK = k; useIdx = u; }, get undo() { return undoStack.length; }, get jointTargets() { return jointTargets; }, relAngle, setScene: (sc, ids) => { scene = sc; propIds = ids; buildWorld(); }, setFacing: (f, d) => { facing = f; dir = d; } };
 </script>
 </body>
 </html>
