@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>なんのポーズ？ | BLOCKYCLAW</title>
+<meta name="description" content="ぐにゃぐにゃ人形にポーズをとらせて、お題を伝えるゲーム。作ったポーズはリンクで友達に出題できる。">
+<meta property="og:title" content="なんのポーズ？">
+<meta property="og:description" content="ぐにゃぐにゃ人形にポーズをとらせて、お題を伝えるゲーム。このポーズ、なんのお題？">
+<meta property="og:image" content="https://kokoaru-ltd.github.io/blockyclaw-site/thumbs/nannopose.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Yomogi&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #26221d; --paper: #f3eee2; --skin: #fffdf6; --red: #d8432e; --sub: #6b655c; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper); color: var(--ink);
+    font-family: "Yomogi", "Hiragino Maru Gothic ProN", "Yu Gothic UI", sans-serif; }
+  canvas { display: block; touch-action: none; }
+  .btn { font: inherit; font-size: 17px; color: var(--ink); background: var(--skin); border: 2.5px solid var(--ink);
+    border-radius: 14px 18px 13px 20px; padding: 7px 16px; cursor: pointer; box-shadow: 3px 3px 0 var(--ink); white-space: nowrap; }
+  .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+  .btn.red { background: var(--red); color: #fff; }
+  .btn.on { background: var(--ink); color: var(--skin); }
+  .btn:disabled { opacity: 0.4; }
+  #bar { position: fixed; left: 0; right: 0; bottom: 12px; display: flex; flex-direction: column; gap: 8px; align-items: center; padding: 0 12px; }
+  .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .row.faces .btn { font-size: 15px; padding: 4px 11px; }
+  .row.choices { display: grid; grid-template-columns: 1fr 1fr; width: min(560px, 100%); }
+  .row.choices .btn { font-size: 19px; padding: 10px 8px; white-space: normal; }
+  .btn.right { background: #bfe3b4; } .btn.wrong { background: #f2b8ad; text-decoration: line-through; }
+  #panel { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-0.6deg); background: var(--skin);
+    border: 2.5px solid var(--ink); border-radius: 18px 22px 16px 24px; box-shadow: 5px 5px 0 var(--ink);
+    padding: 20px 22px; width: min(440px, calc(100vw - 48px)); text-align: center; display: none; }
+  #panel h1 { font-size: 34px; margin: 0 0 4px; font-weight: 400; }
+  #panel p { margin: 6px 0; line-height: 1.6; }
+  #panel .sub { color: var(--sub); font-size: 15px; }
+  #panel .big { font-size: 30px; margin: 4px 0; }
+  #panel .row { margin-top: 12px; }
+  .cards { display: grid; gap: 8px; margin-top: 10px; }
+  .cards .btn { font-size: 22px; padding: 10px; }
+  .home { color: var(--sub); font-size: 14px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel"></div>
+<div id="bar"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+<script>
+const { Engine, Bodies, Body, Composite, Constraint, Query } = Matter;
+const INK = '#26221d', PAPER = '#f3eee2', SKIN = '#fffdf6', RED = '#d8432e';
+const SW = 1000, SH = 720, FLOOR = 650;           // 舞台の大きさ（どの画面でも同じ座標）
+const MAX_PINS = 5, POSE_SEC = 30, ANSWER_SEC = 15;
+const GAME_URL = 'https://kokoaru-ltd.github.io/blockyclaw-site/nannopose/';
+const ODAI = ['歯医者','満員電車','金魚すくい','土下座','バンジージャンプ','自撮り','寝坊した朝','フラミンゴ','ぎっくり腰','一本釣り',
+  '盆踊り','ボウリング','犬の散歩','つり革','足がつった','サーフィン','忍者','ゾンビ','ラジオ体操','タクシーを止める',
+  '蚊をたたく','スキージャンプ','居眠り','UFOにさらわれる','ホームラン','ヨガ','相撲','カンフー','やり投げ','雪かき',
+  '綱引き','逆立ち','腕相撲','ゴルフ','卓球','バレエ','ロボットダンス','いないいないばあ','お辞儀','ガッツポーズ',
+  '幽霊','かかし','雷に打たれる','バナナで滑る','おならを我慢','虫から逃げる','ゴール！','コマネチ','ハイタッチ','重い荷物',
+  '弓矢','釣った魚が大きい','カメラマン','指揮者','ピアノ','ギター','ドラム','マラソンのゴール','木登り','ジャンケン負け'];
+const FACES = [['normal','ふつう'],['happy','にこにこ'],['sad','かなしい'],['angry','おこ'],['surprise','びっくり'],['sleepy','ねむい'],['pain','いたい'],['dead','×_×']];
+
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const panel = document.getElementById('panel'), bar = document.getElementById('bar');
+let W, H, DPR, s = 1, ox = 0, oy = 0;
+let engine, parts = [], props = [], pins = [], drag = null, grain;
+let state = 'title', odaiIdx = 0, face = 'normal', timeLeft = 0, timerOn = false, reveal = false, hideOdai = false, frozen = false;
+let answerStartAt = 0, answerLock = false;
+
+// ---------- 手描き風の線 ----------
+function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a);
+  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+let boil = 0;
+function sketch(pts, seed, { closed = true, fill = null, width = 3, amp = 1.5, twice = true } = {}) {
+  for (let pass = 0; pass < (twice ? 2 : 1); pass++) {
+    const r = rng(seed * 977 + boil * 131 + pass * 7919);
+    const p = pts.map(([x, y]) => [x + (r() - 0.5) * 2 * amp, y + (r() - 0.5) * 2 * amp]);
+    ctx.beginPath();
+    if (closed) {
+      const n = p.length, m = (i) => [(p[i][0] + p[(i + 1) % n][0]) / 2, (p[i][1] + p[(i + 1) % n][1]) / 2];
+      const st = m(n - 1); ctx.moveTo(st[0], st[1]);
+      for (let i = 0; i < n; i++) { const e = m(i); ctx.quadraticCurveTo(p[i][0], p[i][1], e[0], e[1]); }
+      ctx.closePath();
+    } else {
+      ctx.moveTo(p[0][0], p[0][1]);
+      for (let i = 1; i < p.length - 1; i++) ctx.quadraticCurveTo(p[i][0], p[i][1], (p[i][0] + p[i + 1][0]) / 2, (p[i][1] + p[i + 1][1]) / 2);
+      ctx.lineTo(p[p.length - 1][0], p[p.length - 1][1]);
+    }
+    if (fill && pass === 0) { ctx.fillStyle = fill; ctx.fill(); }
+    ctx.lineWidth = width * (pass ? 0.55 : 1); ctx.strokeStyle = INK; ctx.lineJoin = ctx.lineCap = 'round'; ctx.stroke();
+  }
+}
+function capsulePts(w, h) {
+  const r = Math.min(w, h) / 2 * 0.92, pts = [], hw = w / 2 - r, hh = h / 2 - r;
+  for (const [cx, cy, a0] of [[hw, -hh, -90], [hw, hh, 0], [-hw, hh, 90], [-hw, -hh, 180]])
+    for (let i = 0; i <= 3; i++) { const a = (a0 + i * 30) * Math.PI / 180; pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); }
+  return pts;
+}
+function circlePts(r, n = 14) { return Array.from({ length: n }, (_, i) => [Math.cos(i / n * 6.283) * r, Math.sin(i / n * 6.283) * r]); }
+function toWorld(b, pts) { const c = Math.cos(b.angle), si = Math.sin(b.angle); return pts.map(([x, y]) => [b.position.x + x * c - y * si, b.position.y + x * si + y * c]); }
+
+// ---------- 世界 ----------
+function buildWorld() {
+  engine = Engine.create(); engine.gravity.y = 1; parts = []; props = []; pins = []; drag = null; frozen = false;
+  const t = 300, st = { isStatic: true, friction: 1 };
+  Composite.add(engine.world, [Bodies.rectangle(SW / 2, FLOOR + t / 2, SW + 600, t, st), Bodies.rectangle(-t / 2, SH / 2, t, SH * 3, st),
+    Bodies.rectangle(SW + t / 2, SH / 2, t, SH * 3, st), Bodies.rectangle(SW / 2, -t / 2 - 200, SW + 600, t, st)]);
+  makeDoll(SW / 2, 400); makeProps();
+}
+const PART_NAMES = ['head', 'chest', 'pelvis', 'uaL', 'faL', 'uaR', 'faR', 'thL', 'shL', 'thR', 'shR'];
+function makeDoll(cx, cy) {
+  const g = { collisionFilter: { group: -1 }, frictionAir: 0.035, friction: 0.9, restitution: 0.05, density: 0.0018 };
+  const P = (name, body, w, h, seed, extra = {}) => { body.label = name; parts.push(Object.assign({ body, w, h, seed, name }, extra)); return body; };
+  const head = P('head', Bodies.circle(cx, cy - 118, 36, g), 72, 72, 1, { round: true });
+  const chest = P('chest', Bodies.rectangle(cx, cy - 45, 62, 74, { ...g, chamfer: { radius: 20 } }), 62, 74, 2);
+  const pelvis = P('pelvis', Bodies.rectangle(cx, cy + 16, 56, 44, { ...g, chamfer: { radius: 16 } }), 56, 44, 3);
+  const limb = (name, x, y, w, h, seed, end) => P(name, Bodies.rectangle(x, y, w, h, { ...g, chamfer: { radius: w / 2 - 1 } }), w, h, seed, { end });
+  const uaL = limb('uaL', cx - 44, cy - 42, 20, 62, 4), faL = limb('faL', cx - 44, cy + 16, 18, 60, 5, 'hand');
+  const uaR = limb('uaR', cx + 44, cy - 42, 20, 62, 6), faR = limb('faR', cx + 44, cy + 16, 18, 60, 7, 'hand');
+  const thL = limb('thL', cx - 16, cy + 72, 24, 70, 8), shL = limb('shL', cx - 16, cy + 138, 20, 70, 9, 'foot');
+  const thR = limb('thR', cx + 16, cy + 72, 24, 70, 10), shR = limb('shR', cx + 16, cy + 138, 20, 70, 11, 'foot');
+  const js = [];
+  const J = (a, pa, b, pb) => js.push(Constraint.create({ bodyA: a, pointA: pa, bodyB: b, pointB: pb, length: 0, stiffness: 0.95, damping: 0.15 }));
+  J(head, { x: 0, y: 34 }, chest, { x: 0, y: -37 }); J(chest, { x: 0, y: 35 }, pelvis, { x: 0, y: -20 });
+  J(chest, { x: -32, y: -26 }, uaL, { x: 0, y: -26 }); J(uaL, { x: 0, y: 28 }, faL, { x: 0, y: -26 });
+  J(chest, { x: 32, y: -26 }, uaR, { x: 0, y: -26 }); J(uaR, { x: 0, y: 28 }, faR, { x: 0, y: -26 });
+  J(pelvis, { x: -15, y: 16 }, thL, { x: 0, y: -30 }); J(thL, { x: 0, y: 32 }, shL, { x: 0, y: -31 });
+  J(pelvis, { x: 15, y: 16 }, thR, { x: 0, y: -30 }); J(thR, { x: 0, y: 32 }, shR, { x: 0, y: -31 });
+  Composite.add(engine.world, [...parts.map(p => p.body), ...js]);
+  addPin(head, { x: 0, y: -26 });
+}
+function makeProps() {
+  const o = { frictionAir: 0.02, friction: 0.9, restitution: 0.2, density: 0.001 };
+  const add = (body, w, h, seed, round) => { body.isProp = true; props.push({ body, w, h, seed, round }); Composite.add(engine.world, body); };
+  add(Bodies.circle(250, FLOOR - 31, 30, o), 60, 60, 21, true);
+  add(Bodies.rectangle(760, FLOOR - 32, 78, 62, { ...o, chamfer: { radius: 6 } }), 78, 62, 22);
+  add(Bodies.rectangle(660, FLOOR - 96, 14, 190, { ...o, chamfer: { radius: 6 } }), 14, 190, 23);
+}
+function freeze() { frozen = true; drag = null; [...parts, ...props].forEach(p => Body.setStatic(p.body, true)); }
+
+// ---------- ポーズをリンクに入れる ----------
+function encodePose() {
+  const nums = [];
+  for (const p of [...PART_NAMES.map(n => parts.find(q => q.name === n)), ...props]) {
+    const b = p.body; nums.push(Math.round(b.position.x), Math.round(b.position.y), Math.round(b.angle * 100));
+  }
+  const pinNums = pins.map(c => [PART_NAMES.indexOf(c.bodyB.label), Math.round(c.pointB.x), Math.round(c.pointB.y)]).flat();
+  const key = (odaiIdx * 7 + 13) % 997;
+  return ['1', key, FACES.findIndex(f => f[0] === face), pins.length, ...pinNums, ...nums].join('.');
+}
+function decodePose(str) {
+  const a = str.split('.').map(Number);
+  if (a[0] !== 1 || a.some(isNaN)) return null;
+  let i = 1; const key = a[i++], fi = a[i++], np = a[i++];
+  let idx = -1; for (let k = 0; k < ODAI.length; k++) if ((k * 7 + 13) % 997 === key) idx = k;
+  const pinList = []; for (let k = 0; k < np; k++) pinList.push([a[i++], a[i++], a[i++]]);
+  const bodies = []; while (i + 2 < a.length) { bodies.push([a[i], a[i + 1], a[i + 2] / 100]); i += 3; }
+  if (idx < 0 || bodies.length !== 14) return null;
+  return { idx, face: (FACES[fi] || FACES[0])[0], pinList, bodies };
+}
+function loadPose(d) {
+  buildWorld();
+  pins.slice().forEach(removePin);
+  [...PART_NAMES.map(n => parts.find(q => q.name === n)), ...props].forEach((p, k) => {
+    const [x, y, an] = d.bodies[k]; Body.setPosition(p.body, { x, y }); Body.setAngle(p.body, an);
+  });
+  odaiIdx = d.idx; face = d.face; freeze();
+  // Matterの pointB は体の回転に合わせて回った後の向きで保存されているので、そのまま足す
+  pins = d.pinList.map(([pi, px, py]) => { const b = parts.find(q => q.name === PART_NAMES[pi]).body;
+    return { pointA: { x: b.position.x + px, y: b.position.y + py }, bodyB: b, pointB: { x: px, y: py }, fake: true }; });
+}
+
+// ---------- 画びょう・つかむ ----------
+function addPin(body, offset) {
+  if (pins.length >= MAX_PINS) removePin(pins[0]);
+  const c = Constraint.create({ pointA: { x: body.position.x + offset.x, y: body.position.y + offset.y }, bodyB: body, pointB: { ...offset }, length: 0, stiffness: 0.9, damping: 0.2 });
+  pins.push(c); Composite.add(engine.world, c);
+}
+function removePin(c) { pins = pins.filter(p => p !== c); if (!c.fake) Composite.remove(engine.world, c); }
+function pos(e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left - ox) / s, y: (e.clientY - r.top - oy) / s }; }
+function endInfo(p) { const off = p.end === 'hand' ? [0, p.h / 2 + 4] : [5, p.h / 2 + 3]; const [[x, y]] = toWorld(p.body, [off]); return { x, y }; }
+const ORDER = ['uaL', 'faL', 'thL', 'shL', 'pelvis', 'chest', 'head', 'thR', 'shR', 'uaR', 'faR'];
+function pick(m) {
+  const front = [...ORDER].reverse().map(n => parts.find(p => p.name === n));
+  for (const p of front) if (p.end) { const e = endInfo(p); if (Math.hypot(e.x - m.x, e.y - m.y) < 20) return p.body; }
+  for (const p of [...front, ...props]) if (Query.point([p.body], m).length) return p.body;
+  let best = null, bd = 22;
+  for (const p of [...front, ...props]) for (const v of p.body.vertices) { const d = Math.hypot(v.x - m.x, v.y - m.y); if (d < bd) { bd = d; best = p.body; } }
+  return best;
+}
+function startDrag(body, anchor, m, e, fromPin) {
+  const c = Constraint.create({ pointA: { ...m }, bodyB: body, pointB: { x: anchor.x - body.position.x, y: anchor.y - body.position.y }, length: 0, stiffness: 0.6, damping: 0.25 });
+  Composite.add(engine.world, c);
+  drag = { c, body, fromPin, x0: m.x, y0: m.y, t0: performance.now(), moved: false };
+  cv.setPointerCapture(e.pointerId);
+}
+cv.addEventListener('pointerdown', (e) => {
+  if (state !== 'pose' || frozen) return;
+  const m = pos(e);
+  const hit = pins.find(p => Math.hypot(p.pointA.x - m.x, p.pointA.y - m.y) < 16);
+  if (hit) { const body = hit.bodyB, a = { ...hit.pointA }; removePin(hit); startDrag(body, a, m, e, true); return; }
+  const body = pick(m); if (!body) return;
+  pins.filter(p => p.bodyB === body).forEach(removePin);
+  startDrag(body, m, m, e, false);
+});
+cv.addEventListener('pointermove', (e) => {
+  if (!drag) return; const m = pos(e); drag.c.pointA = m;
+  if (Math.hypot(m.x - drag.x0, m.y - drag.y0) > 6) drag.moved = true;
+});
+function release() {
+  if (!drag) return;
+  const { c, body, fromPin, moved, t0 } = drag; Composite.remove(engine.world, c); drag = null;
+  if (frozen) return;
+  if (fromPin && !moved && performance.now() - t0 < 400) return;
+  if (!body.isProp) addPin(body, { x: c.pointB.x, y: c.pointB.y });
+}
+cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release);
+
+// ---------- 描画 ----------
+function makeGrain() {
+  grain = document.createElement('canvas'); grain.width = grain.height = 256;
+  const g = grain.getContext('2d'), d = g.createImageData(256, 256), r = rng(5);
+  for (let i = 0; i < d.data.length; i += 4) { const v = r() < 0.5 ? 0 : 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = r() * 16; }
+  g.putImageData(d, 0, 0);
+}
+function drawRoom() {
+  sketch([[-40, FLOOR], [SW * 0.3, FLOOR + 2], [SW * 0.62, FLOOR - 1], [SW + 40, FLOOR + 1]], 50, { closed: false, width: 3.2, amp: 1.2 });
+  const r = rng(77);
+  for (let i = 0; i < 9; i++) { const x = r() * SW, y = FLOOR + 14 + r() * 40, l = 20 + r() * 60;
+    sketch([[x, y], [x + l / 2, y + 1], [x + l, y]], 60 + i, { closed: false, width: 1.6, amp: 0.8, twice: false }); }
+  ctx.globalAlpha = 0.45;
+  const wx = 90, wy = 190;
+  sketch([[wx, wy], [wx + 60, wy], [wx + 120, wy], [wx + 120, wy + 75], [wx + 120, wy + 150], [wx + 60, wy + 150], [wx, wy + 150], [wx, wy + 75]], 70, { width: 2.2, amp: 1.2 });
+  sketch([[wx + 60, wy], [wx + 61, wy + 75], [wx + 60, wy + 150]], 71, { closed: false, width: 1.8, twice: false });
+  sketch([[wx, wy + 75], [wx + 60, wy + 76], [wx + 120, wy + 75]], 72, { closed: false, width: 1.8, twice: false });
+  const kx = 880, ky = 230;
+  sketch(circlePts(34).map(([x, y]) => [kx + x, ky + y]), 73, { width: 2.2, amp: 1.2 });
+  sketch([[kx, ky], [kx + 1, ky - 12], [kx, ky - 22]], 74, { closed: false, width: 2, twice: false });
+  sketch([[kx, ky], [kx + 8, ky + 3], [kx + 15, ky + 6]], 75, { closed: false, width: 2, twice: false });
+  ctx.globalAlpha = 1;
+}
+function drawOdaiCard() {
+  if (state === 'title') return;
+  const w = 520, x = SW / 2 - w / 2, y = 18, h = 92;
+  ctx.save(); ctx.translate(SW / 2, y + h / 2); ctx.rotate(-0.012); ctx.translate(-SW / 2, -(y + h / 2));
+  sketch([[x, y], [x + w / 2, y - 2], [x + w, y], [x + w + 2, y + h / 2], [x + w, y + h], [x + w / 2, y + h + 2], [x, y + h], [x - 2, y + h / 2]], 80, { fill: SKIN, width: 2.6, amp: 1 });
+  ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = '17px Yomogi, sans-serif'; ctx.fillText(state === 'answer' && !reveal ? 'このポーズ、なんのお題？' : 'お題', SW / 2, y + 22);
+  const text = (state === 'answer' && !reveal) || hideOdai ? '？？？' : ODAI[odaiIdx];
+  let fs = 40; ctx.font = `${fs}px Yomogi, sans-serif`;
+  while (ctx.measureText(text).width > w - 40 && fs > 18) { fs -= 2; ctx.font = `${fs}px Yomogi, sans-serif`; }
+  ctx.fillText(text, SW / 2, y + 60);
+  ctx.restore();
+  if (state === 'pose' && !frozen) {
+    ctx.font = '16px Yomogi, sans-serif'; ctx.fillStyle = '#6b655c'; ctx.textAlign = 'center';
+    ctx.fillText(`つかんだ所に画びょう（あと${MAX_PINS - pins.length}本）・画びょうを押すと抜ける`, SW / 2, y + h + 26);
+  }
+}
+function drawTimer() {
+  if (!timerOn && !(state === 'pose' && !frozen)) return;
+  const x = 905, y = 70, r = 46, total = state === 'answer' ? ANSWER_SEC : POSE_SEC, f = Math.max(0, timeLeft / total);
+  sketch(circlePts(r, 16).map(([a, b]) => [x + a, y + b]), 85, { fill: SKIN, width: 2.6, amp: 1 });
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, r - 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f); ctx.closePath();
+  ctx.fillStyle = timeLeft < 5 ? 'rgba(216,67,46,0.25)' : 'rgba(38,34,29,0.08)'; ctx.fill();
+  ctx.fillStyle = timeLeft < 5 ? RED : INK; ctx.font = '40px Yomogi, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(Math.ceil(timeLeft), x, y + 2);
+}
+function drawPart(p) {
+  const b = p.body;
+  sketch(toWorld(b, p.round ? circlePts(p.w / 2) : capsulePts(p.w, p.h)), p.seed, { fill: SKIN, width: 3.2 });
+  if (p.end) {
+    const r = p.end === 'hand' ? 12 : 13, off = p.end === 'hand' ? [0, p.h / 2 + 4] : [5, p.h / 2 + 3];
+    const shape = p.end === 'hand' ? circlePts(r, 10) : capsulePts(34, 20);
+    sketch(toWorld(b, shape.map(([x, y]) => [x + off[0], y + off[1]])), p.seed + 100, { fill: SKIN, width: 3 });
+  }
+  if (p.name === 'head') drawFace(b);
+}
+function drawFace(b) {
+  const L = (pts, seed, o) => sketch(toWorld(b, pts), seed, { closed: false, width: 2.8, amp: 0.6, twice: false, ...o });
+  const dot = (x, y, r = 3.4) => { const [[px, py]] = toWorld(b, [[x, y]]); ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(px, py, r, 0, 6.3); ctx.fill(); };
+  const ring = (x, y, r, seed) => sketch(toWorld(b, circlePts(r, 9).map(([a, c]) => [a + x, c + y])), seed, { width: 2.4, amp: 0.5, twice: false });
+  switch (face) {
+    case 'happy': L([[-17, -3], [-12, -9], [-7, -3]], 31); L([[7, -3], [12, -9], [17, -3]], 32);
+      sketch(toWorld(b, [[-11, 8], [0, 8], [11, 8], [7, 17], [0, 20], [-7, 17]]), 33, { fill: INK, width: 2.4, amp: 0.4, twice: false }); break;
+    case 'sad': dot(-12, -3); dot(12, -3); L([[-19, -13], [-12, -16], [-6, -12]], 34); L([[6, -12], [12, -16], [19, -13]], 35);
+      L([[-8, 16], [0, 11], [8, 16]], 36); sketch(toWorld(b, [[-15, 3], [-13, 9], [-15, 12], [-17, 9]]), 37, { width: 1.8, amp: 0.3, twice: false }); break;
+    case 'angry': dot(-12, -2); dot(12, -2); L([[-19, -14], [-11, -9], [-5, -7]], 38); L([[5, -7], [11, -9], [19, -14]], 39);
+      L([[-9, 15], [-3, 12], [3, 15], [9, 12]], 40); break;
+    case 'surprise': ring(-12, -4, 6, 41); ring(12, -4, 6, 42); dot(-12, -4, 2); dot(12, -4, 2); ring(0, 14, 6, 43); break;
+    case 'sleepy': L([[-18, -3], [-12, -1], [-6, -3]], 44); L([[6, -3], [12, -1], [18, -3]], 45); ring(0, 13, 3.5, 46);
+      ctx.fillStyle = INK; ctx.font = '18px Yomogi, sans-serif'; { const [[zx, zy]] = toWorld(b, [[28, -30]]); ctx.fillText('z', zx, zy); ctx.font = '13px Yomogi, sans-serif'; ctx.fillText('z', zx + 12, zy - 12); } break;
+    case 'pain': L([[-18, -8], [-10, -4], [-18, 0]], 47); L([[18, -8], [10, -4], [18, 0]], 48);
+      L([[-10, 13], [-5, 10], [0, 14], [5, 10], [10, 13]], 49); L([[22, -16], [25, -6]], 50, { width: 2 }); break;
+    case 'dead': L([[-17, -9], [-8, 1]], 51); L([[-8, -9], [-17, 1]], 52); L([[8, -9], [17, 1]], 53); L([[17, -9], [8, 1]], 54);
+      L([[-8, 13], [8, 13]], 55); sketch(toWorld(b, [[3, 13], [9, 13], [8, 20], [4, 20]]), 56, { fill: RED, width: 2, amp: 0.3, twice: false }); break;
+    default: dot(-12, -5); dot(12, -5); L([[-8, 12], [0, 15], [8, 12]], 57);
+  }
+  L([[-6, -35], [-2, -46], [3, -39]], 58); L([[3, -36], [9, -47], [13, -38]], 59);
+}
+function drawTack(c, alpha = 1) {
+  const { x, y } = c.pointA; ctx.globalAlpha = alpha;
+  sketch(circlePts(9, 9).map(([px, py]) => [x + px, y + py]), 90 + Math.max(0, pins.indexOf(c)), { fill: RED, width: 2.4, amp: 0.8, twice: false });
+  ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.beginPath(); ctx.arc(x - 3, y - 3, 2.4, 0, 6.3); ctx.fill(); ctx.globalAlpha = 1;
+}
+function draw() {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = ctx.createPattern(grain, 'repeat'); ctx.fillRect(0, 0, W, H);
+  ctx.setTransform(DPR * s, 0, 0, DPR * s, DPR * ox, DPR * oy);
+  drawRoom();
+  props.forEach(drawPart);
+  ORDER.forEach(n => drawPart(parts.find(p => p.name === n)));
+  pins.forEach(c => drawTack(c));
+  if (drag && !drag.body.isProp) { const bp = drag.body.position, o = drag.c.pointB; drawTack({ pointA: { x: bp.x + o.x, y: bp.y + o.y } }, 0.5); }
+  drawOdaiCard(); drawTimer();
+}
+
+// ---------- 画面の流れ ----------
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function showPanel(html) { panel.innerHTML = html; panel.style.display = 'block'; }
+function hidePanel() { panel.style.display = 'none'; }
+function setBar(html) { bar.innerHTML = html; layout(); }
+const $ = (sel) => document.querySelector(sel);
+
+function goTitle() {
+  state = 'title'; timerOn = false; reveal = false; hideOdai = false; face = 'happy'; buildWorld();
+  history.replaceState(null, '', location.pathname);
+  showPanel(`<h1>なんのポーズ？</h1>
+    <p class="sub">ぐにゃぐにゃ人形にポーズをとらせて、お題を伝える。<br>作ったポーズはリンクで友達に出題できる。</p>
+    <div class="row"><button class="btn red" id="go">出題する</button></div>
+    <p class="sub" style="margin-top:12px">${POSE_SEC}秒でポーズ → 相手は${ANSWER_SEC}秒で4択から当てる</p>
+    <a class="home" href="../">← BLOCKYCLAW</a>`);
+  setBar('');
+  $('#go').onclick = goChoose;
+}
+function goChoose() {
+  state = 'choose'; buildWorld(); face = 'normal';
+  const picks = []; while (picks.length < 3) { const k = Math.floor(Math.random() * ODAI.length); if (!picks.includes(k)) picks.push(k); }
+  showPanel(`<p class="big">お題をえらぶ</p><p class="sub">えらんだら${POSE_SEC}秒スタート</p>
+    <div class="cards">${picks.map(k => `<button class="btn" data-k="${k}">${esc(ODAI[k])}</button>`).join('')}</div>`);
+  setBar('');
+  panel.querySelectorAll('[data-k]').forEach(b => b.onclick = () => goPose(Number(b.dataset.k)));
+}
+function facesRow() {
+  return `<div class="row faces">${FACES.map(([k, n]) => `<button class="btn ${k === face ? 'on' : ''}" data-f="${k}">${n}</button>`).join('')}</div>`;
+}
+function goPose(k) {
+  state = 'pose'; odaiIdx = k; timeLeft = POSE_SEC; timerOn = true; hidePanel();
+  setBar(`${facesRow()}<div class="row"><button class="btn red" id="done">できた！</button><button class="btn" id="unpin">画びょう全部ぬく</button></div>`);
+  bindFaces();
+  $('#done').onclick = finishPose;
+  $('#unpin').onclick = () => pins.slice().forEach(removePin);
+}
+function bindFaces() { bar.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { face = b.dataset.f; bar.querySelectorAll('[data-f]').forEach(x => x.classList.toggle('on', x.dataset.f === face)); }); }
+function finishPose() {
+  if (state !== 'pose' || frozen) return;
+  timerOn = false; freeze();
+  const link = GAME_URL + '#p=' + encodePose();
+  state = 'done';
+  setBar(`<div class="row"><button class="btn red" id="xq">𝕏で出題する</button><button class="btn" id="local">この端末で友達に出す</button></div>
+    <div class="row"><button class="btn" id="copy">リンクをコピー</button><button class="btn" id="img">画像を保存（お題なし）</button><button class="btn" id="again">もう一回</button></div>`);
+  $('#xq').onclick = () => {
+    const q = new URLSearchParams({ text: `これ、なんのポーズ？🤸\n${ANSWER_SEC}秒で当てられる？\n#なんのポーズ`, url: link });
+    window.open('https://twitter.com/intent/tweet?' + q.toString(), '_blank', 'noopener');
+  };
+  $('#copy').onclick = async () => { try { await navigator.clipboard.writeText(link); $('#copy').textContent = 'コピーした！'; } catch { prompt('このリンクを送ってね', link); } };
+  $('#img').onclick = () => saveImage(true);
+  $('#local').onclick = () => goAnswerIntro(true);
+  $('#again').onclick = goChoose;
+}
+function saveImage(hidden) {
+  hideOdai = hidden; draw(); hideOdai = false;
+  const a = document.createElement('a'); a.download = hidden ? 'なんのポーズ.png' : `なんのポーズ_${ODAI[odaiIdx]}.png`;
+  a.href = cv.toDataURL('image/png'); a.click();
+}
+function goAnswerIntro(local) {
+  state = 'answer'; reveal = false; timerOn = false; timeLeft = ANSWER_SEC; setBar('');
+  showPanel(`<p class="big">${local ? '友達にわたしてね' : 'このポーズ、なんのお題？'}</p>
+    <p class="sub">${ANSWER_SEC}秒以内に、4つの中から当てる</p>
+    <div class="row"><button class="btn red" id="start">スタート</button></div>
+    ${local ? '' : '<p class="sub" style="margin-top:10px"><a class="home" href="#" id="mine">答えずに自分も出題する</a></p>'}`);
+  $('#start').onclick = startAnswer;
+  if (!local) $('#mine').onclick = (e) => { e.preventDefault(); goChoose(); history.replaceState(null, '', location.pathname); };
+}
+function startAnswer() {
+  hidePanel(); answerLock = false;
+  const opts = [odaiIdx]; while (opts.length < 4) { const k = Math.floor(Math.random() * ODAI.length); if (!opts.includes(k)) opts.push(k); }
+  opts.sort(() => Math.random() - 0.5);
+  setBar(`<div class="row choices">${opts.map(k => `<button class="btn" data-a="${k}">${esc(ODAI[k])}</button>`).join('')}</div>`);
+  bar.querySelectorAll('[data-a]').forEach(b => b.onclick = () => answer(Number(b.dataset.a)));
+  timeLeft = ANSWER_SEC; timerOn = true; answerStartAt = performance.now();
+}
+function answer(k) {
+  if (answerLock) return; answerLock = true; timerOn = false; reveal = true;
+  const ok = k === odaiIdx, t = ((performance.now() - answerStartAt) / 1000);
+  bar.querySelectorAll('[data-a]').forEach(b => { const v = Number(b.dataset.a); b.disabled = true;
+    if (v === odaiIdx) b.classList.add('right'); else if (v === k) b.classList.add('wrong'); });
+  const rank = !ok ? '' : t < 3 ? '以心伝心' : t < 7 ? 'なかなかの読み' : 'ギリギリ伝わった';
+  const msg = k < 0 ? '時間切れ！' : ok ? `正解！ ${t.toFixed(1)}秒` : 'ざんねん！';
+  const shareText = ok ? `「なんのポーズ？」に${t.toFixed(1)}秒で正解した！【${rank}】\nあなたも当ててみて👇\n#なんのポーズ` : `「なんのポーズ？」わからなかった…\nあなたは当てられる？👇\n#なんのポーズ`;
+  const link = GAME_URL + '#p=' + encodePose();
+  setTimeout(() => { // 結果は下に出して、ポーズは見えたままにする
+    setBar(`<div class="row" style="font-size:24px;align-items:baseline;gap:12px">${msg}${rank ? `<span style="font-size:18px">【${rank}】</span>` : ''}</div>
+      <div class="row"><button class="btn red" id="mine">自分も出題する</button><button class="btn" id="xs">𝕏で言う</button></div>`);
+    $('#mine').onclick = () => { history.replaceState(null, '', location.pathname); goChoose(); };
+    $('#xs').onclick = () => { const q = new URLSearchParams({ text: shareText, url: link }); window.open('https://twitter.com/intent/tweet?' + q.toString(), '_blank', 'noopener'); };
+  }, 900);
+}
+
+// ---------- ループ ----------
+let last = 0;
+function loop(t) {
+  const dt = Math.min(t - last, 33); last = t;
+  if (!frozen) Engine.update(engine, dt);
+  boil = Math.floor(t / 130);
+  if (timerOn) {
+    timeLeft -= dt / 1000;
+    if (timeLeft <= 0) { timeLeft = 0; if (state === 'pose') finishPose(); else if (state === 'answer') answer(-1); }
+  }
+  draw(); requestAnimationFrame(loop);
+}
+function layout() {
+  W = innerWidth; H = innerHeight; DPR = Math.min(devicePixelRatio || 1, 2);
+  cv.width = W * DPR; cv.height = H * DPR; cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  const reserve = bar.offsetHeight ? bar.offsetHeight + 20 : 16;
+  s = Math.min(W / SW, (H - reserve) / SH); ox = (W - SW * s) / 2; oy = Math.max(0, (H - reserve - SH * s) / 2);
+}
+addEventListener('resize', layout);
+function start() {
+  if (!innerWidth || !innerHeight) { setTimeout(start, 100); return; }
+  makeGrain(); layout();
+  const m = location.hash.match(/#p=([0-9.\-]+)/), d = m && decodePose(m[1]);
+  if (d) { state = 'answer'; loadPose(d); goAnswerIntro(false); } else goTitle();
+  last = performance.now(); requestAnimationFrame(loop);
+}
+start();
+window.__pose = { get parts() { return parts; }, get pins() { return pins; }, encodePose, decodePose, get state() { return state; } };
+</script>
+</body>
+</html>
