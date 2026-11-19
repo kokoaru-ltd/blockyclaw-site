@@ -52,6 +52,11 @@ const INK = '#26221d', PAPER = '#f3eee2', SKIN = '#fffdf6', FAR = '#e4ded1', RED
 const SW = 1000, SH = 720, FLOOR = 650, HORIZON = 500;
 const MAX_PINS = 6, PREP_SEC = 60, REC_SEC = 5, REC_FPS = 10, ANSWER_SEC = 30;
 const GAME_URL = 'https://kokoaru-ltd.github.io/blockyclaw-site/nannopose/';
+// 見本の物ボケ（実際にこのゲームで作った録画）
+const SAMPLE_TIPS = ['ギターは「ほうき」で弾くのがふつう。それを魚でやるから「何でそっち！」になる。',
+  '帽子は「フライパン」をかぶるのがふつう。魚をかぶって「勝負帽」と言い張る。',
+  '電話は「バナナ」がふつう。いちばん電話に見えない「はしご」を耳に当てる。'];
+const SAMPLES = ["7~s54T0EjqYqX9_Ca8Ku8hx9qKRLJNjQGmvYkX1VLcYqTX9gmdLNQnx9uS~0.4.1.11.1.1.0.0.2~MwEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEA6AeUBAAz6AfIBADoB9oFAOgH1AYAvAfWBU2-B9oFqAScCNgFMsIIlAalAsgHxAcAyAfICACICMQHAIgIyAgA_AK6CQC4CPYFWIgOxAkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgIJAggWAAAAAAAAAAAAAAAAAAAABA4QAAAAAAAAAAAAAAAAAAAAAAAACAIdBBxwAAAAAAAAAAAAAAAAAAAAFBhyAAAAAAAAAAAAAAAAAAAAAAAADgA5Ag6EAQAAAAAAAAAAAAAAAAAAABQaiAEAAAAAAAAAAAAAAAAAAAAAAAAGAREBASoAAAAAAAAAAAAAAAAAAAAGBCoAAAAAAAAAAAAAAAAAAAAAAAADAQwCAR0AAAAAAAAAAAAAAAAAAAAFBx8AAAAAAAAAAAAAAAAAAAAAAAAAAwMAAwEAAAAAAAAAAAAAAAAAAAABAwMAAAAAAAAAAAAAAAAAAAAAAAAOB0UEFXYAAAAAAAAAAAAAAAAAAAAAC3AAAAAAAAAAAAAAAAAAAAAAAAAGAg8RM-QBAAAAAAAAAAAAAAAAAAAAGw_uAQAAAAAAAAAAAAAAAAAAAAAAAAkGMA8FTgAAAAAAAAAAAAAAAAAAABsDTAAAAAAAAAAAAAAAAAAAAAAAAAEEDgMCEgAAAAAAAAAAAAAAAAAAAAcCEgAAAAAAAAAAAAAAAAAAAAAAAAIACQEWXwAAAAAAAAAAAAAAAAAAAAwaWwAAAAAAAAAAAAAAAAAAAAAAAAADABIovQEAAAAAAAAAAAAAAAAAAAAmCsEBAAAAAAAAAAAAAAAAAAAAAAAACwIqABJfAAAAAAAAAAAAAAAAAAAAAQJhAAAAAAAAAAAAAAAAAAAAAAAAAAICAQICAAAAAAAAAAAAAAAAAAAABAYEAAAAAAAAAAAAAAAAAAAAAAAABAEPAAcgAAAAAAAAAAAAAAAAAAAABQUcAAAAAAAAAAAAAAAAAAAAAAAACgMvAR-MAQAAAAAAAAAAAAAAAAAAAAMLjgEAAAAAAAAAAAAAAAAAAAAAAAABAg4NGXwAAAAAAAAAAAAAAAAAAAAbCXwAAAAAAAAAAAAAAAAAAAAAAAABAggABSIAAAAAAAAAAAAAAAAAAAAHBSQAAAAAAAAAAAAAAAAAAAAAAAABAAoFBA0AAAAAAAAAAAAAAAAAAAABAg0AAAAAAAAAAAAAAAAAAAAAAAAAAgABEkMAAAAAAAAAAAAAAAAAAAAIFEEAAAAAAAAAAAAAAAAAAAAAAAABAQgMIo0BAAAAAAAAAAAAAAAAAAAAGgqPAQAAAAAAAAAAAAAAAAAAAAAAAAkCLAQSbQAAAAAAAAAAAAAAAAAAAAICbwAAAAAAAAAAAAAAAAAAAAAAAAcCHAECOQAAAAAAAAAAAAAAAAAAAAMFNwAAAAAAAAAAAAAAAAAAAAAAAAMBEAEDFwAAAAAAAAAAAAAAAAAAAAEFFQAAAAAAAAAAAAAAAAAAAAAAAA0DOAcPVQAAAAAAAAAAAAAAAAAAAAsbUQAAAAAAAAAAAAAAAAAAAAAAAAkBLgExtwEAAAAAAAAAAAAAAAAAAAAlLb8BAAAAAAAAAAAAAAAAAAAAAAAABgYfCgdJAAAAAAAAAAAAAAAAAAAABARJAAAAAAAAAAAAAAAAAAAAAAAAAgEDBAIOAAAAAAAAAAAAAAAAAAAABAUOAAAAAAAAAAAAAAAAAAAAAAAAAgINChQ8AAAAAAAAAAAAAAAAAAAAEBI6AAAAAAAAAAAAAAAAAAAAAAAABAAPAR58AAAAAAAAAAAAAAAAAAAAEhiAAQAAAAAAAAAAAAAAAAAAAAAAAAwCKQQUYgAAAAAAAAAAAAAAAAAAABIaYgAAAAAAAAAAAAAAAAAAAAAAAAYAGQAGOAAAAAAAAAAAAAAAAAAAAAYMNgAAAAAAAAAAAAAAAAAAAAAAAAIBCwMBIAAAAAAAAAAAAAAAAAAAAAECIgAAAAAAAAAAAAAAAAAAAAAAAAoFKQILVAAAAAAAAAAAAAAAAAAAAAEDTgAAAAAAAAAAAAAAAAAAAAAAAA4AMQUz1AEAAAAAAAAAAAAAAAAAAAANEdoBAAAAAAAAAAAAAAAAAAAAAAAABwYmDQtiAAAAAAAAAAAAAAAAAAAAHwNkAAAAAAAAAAAAAAAAAAAAAAAAAQECAQAHAAAAAAAAAAAAAAAAAAAAAgUJAAAAAAAAAAAAAAAAAAAAAAAAAAICAwohAAAAAAAAAAAAAAAAAAAAAA4fAAAAAAAAAAAAAAAAAAAAAAAAAgEFDCSdAQAAAAAAAAAAAAAAAAAAACAUnQEAAAAAAAAAAAAAAAAAAAAAAAAJAiQGGn0AAAAAAAAAAAAAAAAAAAAKBIEBAAAAAAAAAAAAAAAAAAAAAAAABQAaAAQxAAAAAAAAAAAAAAAAAAAAAwMvAAAAAAAAAAAAAAAAAAAAAAAAAwAKAAATAAAAAAAAAAAAAAAAAAAAAAETAAAAAAAAAAAAAAAAAAAAAAAAAAMGBQMGAAAAAAAAAAAAAAAAAAAAAwEGAAAAAAAAAAAAAAAAAAAAAAAACAElAgdGAAAAAAAAAAAAAAAAAAAABQM-AAAAAAAAAAAAAAAAAAAAAAAAEgFLBjXgAQAAAAAAAAAAAAAAAAAAAAIX6AEAAAAAAAAAAAAAAAAAAAAAAAAVCl4lDYoBAAAAAAAAAAAAAAAAAAAAOwWKAQAAAAAAAAAAAAAAAAAAAAAAAAEECAADIgAAAAAAAAAAAAAAAAAAAAkAJAAAAAAAAAAAAAAAAAAAAAAAAAgBGQAilwEAAAAAAAAAAAAAAAAAAAAaJJUBAAAAAAAAAAAAAAAAAAAAAAAABQMSDirLAQAAAAAAAAAAAAAAAAAAACII0QEAAAA","7~v6Qt1V7LYqX1-iyuIdwhweOiRLJujQC9~1.5.1.11.0.1.6.0.2~MwEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQQEBAQEBAQEBAQEBAQEBAEA6AeUBAAz6AfIBADoB9oFAOgH1AYAkAfgBQCQB9QGAMAI4AUAwAjUBgDIB8QHAMgHyAgAiAjEBwCICMgIAJ4D1glA6AeMBGCIDsQJAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA8FIQAPGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEDBggFJwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABECSAMp4wEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAkEEUkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAh8CFW0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQA0EEE4cBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFg9tCBOfAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwZcQgbfwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEXYQMZXQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUNOwcRLwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAICDAETagAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACCAwdjgEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAxUADyQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFBycEF0gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAQ8AByYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAggCBA0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAoCBAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAgYCAgEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBygBDxQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAxgJBwkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATB1wAKb8BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQciBRMdAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQckBRsxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQUcAxcnAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQccAxkjAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUaBRs7AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMOBxVFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgkkAxcZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMSAQ0dAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAIGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQLAQYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQQNAQgBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","7~uJ0l0Ej5YqbZ_CakJtIezcCkQYBrjQCouJ0v0EjoZKH-_CW4KuwO~2.2.7.6.1.1.1.0.3~MwEBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBAQEBAQEBAQEAQEBAQEBAQEBAQEBAQEBAQEA6AeUBAAz6AfIBADoB9oFAOgH1AYAkAfgBQCQB9QGANwIngXXAu4IugXFCMgHxAcAyAfICACICMQHAIgIyAgA_AL-CQC2DMYJAIYIigW5AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAFIAANHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIBAwUDHgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAoAKwEPeAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQCDQERSgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAELNAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEABgENNgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMAEAENPgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUAGgEPRgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkBKAMLUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0FNgMNWgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsLQAMPWAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcNPgELTgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMLNgERMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFFAIBJAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAECgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEDQAGAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAECwAEBQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"];
 const FACES = [['normal','ふつう'],['happy','にこにこ'],['sad','かなしい'],['angry','おこ'],['surprise','びっくり'],['sleepy','ねむい'],['pain','いたい'],['dead','×_×']];
 const FACINGS = [['front', '正面', 1, 0], ['quarter', 'ななめ', 0.8, 1], ['side', '横', 0.6, 2]]; // 名前, 表示, 胴の幅, 顔の寄せ
 const PART_NAMES = ['head', 'chest', 'pelvis', 'uaL', 'faL', 'uaR', 'faR', 'thL', 'shL', 'thR', 'shR'];
@@ -65,7 +70,14 @@ const ROLES = ['大河ドラマの主役', 'ラスボス', '結婚式の新郎',
   '宇宙飛行士', '演歌歌手', 'パティシエ', 'ボクサー', '執事', '忍者', '正義のヒーロー', '保育士', '寿司職人', '占い師', 'ロックスター',
   'スーパーの店長', 'お天気お姉さん', '王様', '新人アイドル', '面接官'];
 // 道具ごとに「いちばん似合わない使い道」だけを用意する（形が似ている使い方はズレが小さいので入れない）
-const USES = {
+// お題は「やること」だけ。道具は3つ出して、うち1つは「ふつうならこれを使う」道具。どれを使うかはボケる人が選ぶ
+const ACTIONS = [
+  { t: 'ギターを弾け', fit: ['broom', 'umbrella'] }, { t: '電話しろ', fit: ['banana'] }, { t: '剣で戦え', fit: ['umbrella', 'broom'] },
+  { t: '大玉転がしをしろ', fit: ['ball', 'tire'] }, { t: 'マイクで歌え', fit: ['plunger', 'umbrella'] }, { t: 'ゴルフをしろ', fit: ['broom', 'umbrella'] },
+  { t: '帽子をかぶれ', fit: ['pan', 'cone', 'box'] }, { t: 'バットで打て', fit: ['broom', 'umbrella'] }, { t: 'ボウリングをしろ', fit: ['ball', 'tire'] },
+  { t: 'メガホンで叫べ', fit: ['cone'] }, { t: '枕で寝ろ', fit: ['box', 'chicken'] }, { t: '掃除をしろ', fit: ['broom'] },
+  { t: '料理をしろ', fit: ['pan'] }, { t: 'うちわであおげ', fit: ['pan', 'fan'] }, { t: '釣りをしろ', fit: ['broom', 'umbrella'] }];
+const USES_OLD = {
   umbrella: ['マイク', 'ハンバーガー', 'メガネ', '電話'], fish: ['ギター', 'ネクタイ', 'バット', '電話'], banana: ['ハンドル', '王冠', '枕', 'ボウリングの球'],
   cone: ['ギター', '枕', 'スマホ', '財布'], broom: ['メガネ', '帽子', '電話', 'ネックレス'], pan: ['ネクタイ', '枕', '双眼鏡', '帽子'],
   ladder: ['ネックレス', '電話', 'フルート', '財布'], boot: ['花束', '剣', 'マイク', 'ハンバーガー'], box: ['剣', 'ネクタイ', '花束', 'マイク'],
@@ -105,6 +117,9 @@ const PROPS = [
     deco: (L, dot, ring) => { ring(0, -36, 22); L([[0, -58], [0, -14]]); L([[-22, -36], [22, -36]]); L([[-24, 60], [24, 60]], 3); } },
 ];
 
+// 道具の持ち手（道具の中心からの位置）
+const GRIP = { umbrella: [0, 58], fish: [50, 0], banana: [30, 0], cone: [0, -34], broom: [0, -62], pan: [82, 0], ladder: [-22, 50], boot: [0, -40],
+  box: [-40, 0], ball: [0, 26], plunger: [0, -52], tire: [0, 36], chicken: [0, -40], fan: [0, 52] };
 const cv = document.getElementById('c'); let ctx = cv.getContext('2d'); // GIFを作るときは一時的に別のキャンバスに切り替える
 let clockOverride = null, gifRender = null, gifBusy = false;
 const nowMs = () => clockOverride ?? performance.now();
@@ -112,11 +127,24 @@ const panel = document.getElementById('panel'), bar = document.getElementById('b
 let W, H, DPR, s = 1, ox = 0, oy = 0;
 let engine, parts = [], props = [], pins = [], grips = [], drag = null, grain;
 let state = 'title', scene = 0, propIds = [0, 1, 2], caption = '', face = 'normal', facing = 0, dir = 1;
-let roleIdx = 0, mainK = 0, useIdx = 0; // お題：役・主役の道具（3つのうちどれか）・使い道
+let actIdx = 0, roleIdx = -1, usedK = -1; // お題：やること・役（なしもあり）・実際に使った道具
 let hoverBody = null, undoStack = [];
-const roleName = () => ROLES[roleIdx];
-const mainProp = () => PROPS[propIds[mainK]];
-const odaiText = () => `${mainProp().name}を「${USES[mainProp().id][useIdx]}」として使え`;
+const roleName = () => roleIdx >= 0 ? ROLES[roleIdx] : '';
+const odaiText = () => ACTIONS[actIdx].t;
+const isFit = (k) => ACTIONS[actIdx].fit.includes(PROPS[propIds[k]].id);
+const fitNames = () => propIds.filter((_, k) => isFit(k)).map(i => PROPS[i].name).join('・');
+function usedText() {
+  if (usedK < 0) return '';
+  const n = PROPS[propIds[usedK]].name;
+  return isFit(usedK) ? `使った道具：${n}（ふつう）` : `使った道具：${n}（ふつうなら${fitNames()}）`;
+}
+function computeUsed() { // 人形が持っている（くっつけた）道具があればそれ、なければ本番でいちばん動いた道具を「使った道具」とする
+  const held = [0, 1, 2].filter(k => props[k] && grips.some(g => g.bodyB === props[k].body));
+  if (held.length === 1) return held[0];
+  if (!rec) return -1; let best = -1, bl = 40;
+  for (let k = 0; k < 3; k++) { let l = 0; for (let i = 1; i < rec.samples.length; i++) { const a = rec.samples[i - 1].tf[11 + k], b = rec.samples[i].tf[11 + k]; l += Math.hypot(b.x - a.x, b.y - a.y); } if (l > bl) { bl = l; best = k; } }
+  return best;
+}
 let timeLeft = 0, timerOn = false, flash = 0, reroll = 1;
 let rec = null, prepSave = null, recStart = 0, countStart = 0, playStart = 0, cam = 1;
 let tsukkomi = '', rating = -1, reveal = false, answerDone = false;
@@ -197,6 +225,7 @@ function makeProps() {
     const ps = def.build(x, y);
     const body = ps.length > 1 ? Body.create({ parts: ps }) : ps[0];
     Body.set(body, { frictionAir: 0.05, friction: 0.9, restitution: 0.08 }); Body.setDensity(body, 0.001);
+    (body.parts.length > 1 ? body.parts : [body]).forEach(p => { p.collisionFilter.group = -1; }); // 道具は人形とぶつからない（手に持ったとき押し合わない）
     const off = { x: x - body.position.x, y: y - body.position.y };
     body.isProp = true; body.label = 'prop' + k;
     const minY = Math.max(...body.vertices.map(v => v.y)); Body.setPosition(body, { x: body.position.x, y: body.position.y + (FLOOR - 2 - minY) });
@@ -248,14 +277,13 @@ function encodeBoke() {
     const vals = sm.tf.flatMap(t => [t.x, t.y, Math.round(t.a * 100)]);
     vals.forEach((v, k) => putV(out, zz(prev ? v - prev[k] : v))); prev = vals;
   }
-  return ['6', scramble(caption), [scene, ...propIds, facing, dir > 0 ? 1 : 0, roleIdx, mainK, useIdx].join('.'), b64e(Uint8Array.from(out))].join('~');
+  return ['7', scramble(caption), [scene, ...propIds, facing, dir > 0 ? 1 : 0, actIdx, roleIdx + 1, usedK + 1].join('.'), b64e(Uint8Array.from(out))].join('~');
 }
 function decodeBoke(str) {
   try {
-    const [v, cap, meta, data] = str.split('~'); if (v !== '6') return null;
-    const m = meta.split('.').map(Number); const [sc, a1, a2, a3, fc, dr, ro, mk, us] = m;
-    if (!SCENES[sc] || [a1, a2, a3].some(i => !PROPS[i]) || !FACINGS[fc] || !ROLES[ro] || !(mk >= 0 && mk < 3)) return null;
-    if (!USES[PROPS[[a1, a2, a3][mk]].id][us]) return null;
+    const [v, cap, meta, data] = str.split('~'); if (v !== '7') return null;
+    const m = meta.split('.').map(Number); const [sc, a1, a2, a3, fc, dr, ac, ro1, us1] = m;
+    if (!SCENES[sc] || [a1, a2, a3].some(i => !PROPS[i]) || !FACINGS[fc] || !ACTIONS[ac] || !(ro1 === 0 || ROLES[ro1 - 1]) || !(us1 >= 0 && us1 <= 3)) return null;
     const buf = b64d(data), st = { i: 0 };
     const n = getV(buf, st); if (n < 2 || n > 60) return null;
     const faces = []; for (let k = 0; k < n; k++) faces.push(getV(buf, st));
@@ -267,7 +295,7 @@ function decodeBoke(str) {
       const tf = []; for (let j = 0; j < 14; j++) tf.push({ x: vals[j * 3], y: vals[j * 3 + 1], a: vals[j * 3 + 2] / 100 });
       samples.push({ tf, face: faces[k] });
     }
-    return { caption: unscramble(cap), scene: sc, propIds: [a1, a2, a3], facing: fc, dir: dr ? 1 : -1, roleIdx: ro, mainK: mk, useIdx: us, rec: { samples, pins: pinsArr } };
+    return { caption: unscramble(cap), scene: sc, propIds: [a1, a2, a3], facing: fc, dir: dr ? 1 : -1, actIdx: ac, roleIdx: ro1 - 1, usedK: us1 - 1, rec: { samples, pins: pinsArr } };
   } catch { return null; }
 }
 const decodeReply = (str) => { try { const [t, r] = str.split('~'); return { tsukkomi: unscramble(t), rating: Number(r) }; } catch { return null; } };
@@ -353,11 +381,32 @@ function release() {
   if (tap) { addPin(body, { x: c.pointB.x, y: c.pointB.y }); return; } // タップしたときだけ画びょうを刺す
   const at = { x: body.position.x + c.pointB.x, y: body.position.y + c.pointB.y };
   if (!body.isProp) return; // 人形はドラッグして離せば、その形で止まる
-  {
-    const touching = parts.map(p => p.body).filter(b => Query.point([b], at).length);
+  { // 手の近く（だいたい手のひら2つ分）で離すと、道具の「持ち手」が手に吸い付く
+    const pr = props.find(p => p.body === body);
     const hands = parts.filter(p => SHAPES[p.name][3] === 'hand').map(p => ({ b: p.body, e: endPoint(p.name, tfOf(p.body)) }));
-    const nearHands = hands.filter(o => distToBody(body, o.e) < 26).map(o => o.b); // 両手が届いていれば両手で持つ
-    const targets = nearHands.length ? nearHands : touching.slice(0, 1);
+    let near = null, nd = 80;
+    for (const h of hands) { const d = Math.min(distToBody(body, h.e), Math.hypot(h.e.x - at.x, h.e.y - at.y)); if (d < nd) { nd = d; near = h; } }
+    if (near) {
+      const g0 = GRIP[pr.def.id] || [0, 0];
+      const [[gx, gy]] = toWorld(tfOf(body), [[g0[0] + pr.off.x, g0[1] + pr.off.y]]);
+      Body.setPosition(body, { x: body.position.x + near.e.x - gx, y: body.position.y + near.e.y - gy });
+      Body.setVelocity(body, { x: 0, y: 0 }); Body.setAngularVelocity(body, 0);
+      const other = hands.find(h => h !== near && distToBody(body, h.e) < 30); // もう片方の手も届いていれば両手持ち
+      const targetsH = other ? [near, other] : [near];
+      for (const h of targetsH) {
+        const g = Constraint.create({ bodyA: h.b, pointA: { x: h.e.x - h.b.position.x, y: h.e.y - h.b.position.y }, bodyB: body, pointB: { x: h.e.x - body.position.x, y: h.e.y - body.position.y }, length: 0, stiffness: 0.9, damping: 0.2 });
+        grips.push(g); Composite.add(engine.world, g);
+      }
+      if (!other) { // 片手だと持ち手を中心にくるくる回るので、2点目で向きを固定
+        const ang = body.angle, d2 = { x: Math.cos(ang) * 20, y: Math.sin(ang) * 20 }, p2 = { x: near.e.x + d2.x, y: near.e.y + d2.y };
+        const g2 = Constraint.create({ bodyA: near.b, pointA: { x: p2.x - near.b.position.x, y: p2.y - near.b.position.y }, bodyB: body, pointB: { x: p2.x - body.position.x, y: p2.y - body.position.y }, length: 0, stiffness: 0.6, damping: 0.2 });
+        grips.push(g2); Composite.add(engine.world, g2);
+      }
+      flash = 0.25; return;
+    }
+    const touching = parts.map(p => p.body).filter(b => Query.point([b], at).length);
+    const nearHands = [];
+    const targets = touching.slice(0, 1); // 頭や体に押し当てた場合は、その場所にくっつける
     if (targets.length) {
       for (const target of targets) {
         const hp = nearHands.includes(target) ? endPoint(parts.find(p => p.body === target).name, tfOf(target)) : at;
@@ -558,13 +607,17 @@ function timerDial(total) {
 function drawHud() {
   if (state === 'title' || state === 'choose') return;
   // お題（基準）はずっと見せる：役・場面・使い方
-  const scn = `役：${roleName()}　場面：${SCENES[scene][0]}`;
-  card(scn, odaiText());
+  const scn = (roleName() ? `役：${roleName()}　` : '') + `場面：${SCENES[scene][0]}　道具：${propNames()}`;
+  card(scn, `お題：${odaiText()}`);
+  if (usedK >= 0 && ['caption', 'done', 'answer', 'reply', 'gif', 'sample'].includes(state)) {
+    ctx.font = '19px Yomogi, sans-serif'; ctx.fillStyle = isFit(usedK) ? '#6b655c' : RED; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(usedText(), SW / 2, 136);
+  }
   ctx.font = '16px Yomogi, sans-serif'; ctx.fillStyle = '#6b655c'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   if (state === 'prep') ctx.fillText(`ドラッグで動かす（離すとその形で止まる）・タップで画びょう あと${MAX_PINS - pins.length}本・道具は手に当てて離すと持つ`, SW / 2, 134);
   if (state === 'count') ctx.fillText('本番いくよ…', SW / 2, 134);
   if (state === 'review') ctx.fillText('この動きでいい？', SW / 2, 134);
-  if (caption && ['caption', 'done', 'answer', 'reply', 'gif'].includes(state)) serifu(caption);
+  if (caption && ['caption', 'done', 'answer', 'reply', 'gif', 'sample'].includes(state)) serifu(caption);
   if (state === 'prep' || state === 'answer') if (timerOn) timerDial(state === 'answer' ? ANSWER_SEC : PREP_SEC);
   if (state === 'count') { const n = 3 - Math.floor((performance.now() - countStart) / 700);
     ctx.save(); ctx.font = '150px Yomogi, sans-serif'; ctx.fillStyle = RED; ctx.lineWidth = 10; ctx.strokeStyle = SKIN; ctx.textAlign = 'center';
@@ -616,7 +669,7 @@ function draw(tPlay) {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H);
   // 再生のときは少しカメラを寄せる
-  const target = (state === 'review' || state === 'answer' || state === 'reply' || state === 'done' || state === 'caption' || state === 'gif') ? 1.07 : 1;
+  const target = (state === 'review' || state === 'answer' || state === 'reply' || state === 'done' || state === 'caption' || state === 'gif' || state === 'sample') ? 1.07 : 1;
   cam = state === 'gif' ? 1.07 : cam + (target - cam) * 0.08;
   ctx.setTransform(DPR * s * cam, 0, 0, DPR * s * cam, DPR * (ox + (1 - cam) * SW / 2 * s), DPR * (oy + (1 - cam) * 430 * s));
   drawScene();
@@ -705,8 +758,13 @@ function setBar(html) { bar.innerHTML = html; layout(); }
 const xIntent = (text, url) => window.open('https://twitter.com/intent/tweet?' + new URLSearchParams({ text, url }).toString(), '_blank', 'noopener');
 function drawLots() {
   scene = Math.floor(Math.random() * SCENES.length); const ids = []; while (ids.length < 3) { const k = Math.floor(Math.random() * PROPS.length); if (!ids.includes(k)) ids.push(k); } propIds = ids;
-  roleIdx = Math.floor(Math.random() * ROLES.length); mainK = Math.floor(Math.random() * 3);
-  useIdx = Math.floor(Math.random() * USES[PROPS[propIds[mainK]].id].length);
+  // お題をひいて、「ふつうの道具」1つ＋それ以外2つを並べる
+  actIdx = Math.floor(Math.random() * ACTIONS.length);
+  const fitIds = ACTIONS[actIdx].fit, fitPick = fitIds[Math.floor(Math.random() * fitIds.length)];
+  const fitI = PROPS.findIndex(p => p.id === fitPick), rest = [];
+  while (rest.length < 2) { const k = Math.floor(Math.random() * PROPS.length); if (k !== fitI && !rest.includes(k) && !fitIds.includes(PROPS[k].id)) rest.push(k); }
+  propIds = [fitI, ...rest].sort(() => Math.random() - 0.5);
+  usedK = -1;
 }
 
 function goTitle() {
@@ -714,22 +772,35 @@ function goTitle() {
   history.replaceState(null, '', location.pathname);
   showPanel(`<h1>物ボケ人形</h1>
     <p class="sub">役と、似合わない道具の使い方をひいて、ぐにゃぐにゃ人形で物ボケ。<br>送れば、友達がツッコんでくれる。</p>
-    <div class="row"><button class="btn red" id="go">ボケる</button></div>
+    <div class="row"><button class="btn red" id="go">ボケる</button><button class="btn" id="smp">見本を見る</button></div>
     <p class="sub" style="margin-top:12px">準備${PREP_SEC}秒 → 本番${REC_SEC}秒 → セリフ → 友達が${ANSWER_SEC}秒でツッコむ</p>
     <p class="sub"><a class="home" href="${HASH_URL}" target="_blank" rel="noopener">みんなの #物ボケ を見る</a>　<a class="home" href="../">← BLOCKYCLAW</a></p>`);
-  setBar(''); $('#go').onclick = goChoose;
+  setBar(''); $('#go').onclick = goChoose; $('#smp').onclick = () => goSample(0);
+}
+function goSample(i) { // 見本を再生する
+  const d = decodeBoke(SAMPLES[i]); if (!d) return;
+  hidePanel(); caption = d.caption; scene = d.scene; propIds = d.propIds; facing = d.facing; dir = d.dir; rec = d.rec;
+  actIdx = d.actIdx; roleIdx = d.roleIdx; usedK = d.usedK; tsukkomi = ''; rating = -1; buildWorld();
+  state = 'sample'; timerOn = false; playStart = performance.now();
+  setBar(`<div class="msg">見本 ${i + 1} / ${SAMPLES.length}：${esc(SAMPLE_TIPS[i] || '')}</div>
+    <div class="row"><button class="btn red" id="go">自分もボケる</button><button class="btn" id="nx">次の見本</button><button class="btn" id="tt">タイトルへ</button></div>`);
+  $('#go').onclick = goChoose; $('#nx').onclick = () => goSample((i + 1) % SAMPLES.length); $('#tt').onclick = goTitle;
 }
 function goChoose() {
-  state = 'choose'; rec = null; face = 'normal'; facing = 0; dir = 1; caption = ''; tsukkomi = ''; rating = -1; reveal = false; timerOn = false; reroll = 1;
+  state = 'choose'; rec = null; face = 'normal'; facing = 0; dir = 1; caption = ''; roleIdx = -1; tsukkomi = ''; rating = -1; reveal = false; timerOn = false; reroll = 1;
   history.replaceState(null, '', location.pathname); undoStack = [];
   drawLots(); buildWorld(); renderChoose();
 }
 function renderChoose() {
-  const others = propIds.filter((_, k) => k !== mainK).map(i => PROPS[i].name).join('・');
-  showPanel(`<p class="sub">あなたは</p><p class="big">${esc(roleName())}</p>
-    <p class="sub" style="margin-top:6px">お題</p><p class="big" style="font-size:23px">${esc(odaiText())}</p>
-    <p class="sub">場面：${esc(SCENES[scene][0])}　ほかの道具：${esc(others)}</p>
-    <div class="row"><button class="btn red" id="start">これでボケる</button><button class="btn" id="re" ${reroll ? '' : 'disabled'}>ひきなおす（${reroll}回）</button></div>`);
+  showPanel(`<p class="sub">お題</p><p class="big">${esc(odaiText())}</p>
+    <p class="sub" style="margin-top:6px">使える道具（どれを使ってもいい）</p>
+    <p style="font-size:20px">${propIds.map((i, k) => esc(PROPS[i].name) + (isFit(k) ? '<span class="sub">（ふつう）</span>' : '')).join('・')}</p>
+    <p class="sub">「ふつう」の道具を使うと、ただの再現。<br>似合わない道具を使うほど「何でそっち！」になる。</p>
+    ${roleName() ? `<p>役：${esc(roleName())}</p>` : ''}
+    <p class="sub">場面：${esc(SCENES[scene][0])}</p>
+    <div class="row"><button class="btn red" id="start">これでボケる</button><button class="btn" id="re" ${reroll ? '' : 'disabled'}>ひきなおす（${reroll}回）</button>
+      <button class="btn sm" id="role">${roleName() ? '役をはずす' : '役もつける（むずかしめ）'}</button></div>`);
+  $('#role').onclick = () => { roleIdx = roleIdx >= 0 ? -1 : Math.floor(Math.random() * ROLES.length); renderChoose(); };
   setBar('');
   $('#start').onclick = goPrep;
   $('#re').onclick = () => { if (!reroll) return; reroll--; drawLots(); buildWorld(); renderChoose(); };
@@ -764,7 +835,8 @@ function stopRec() {
 }
 function goCaption() {
   state = 'caption'; playStart = performance.now();
-  setBar(`<div class="msg">${esc(roleName())}のセリフをひとこと（なくてもOK）</div>
+  usedK = computeUsed();
+  setBar(`<div class="msg">${roleName() ? esc(roleName()) + 'の' : ''}セリフをひとこと（なくてもOK）</div>
     <form class="row" id="cf"><input class="inp" id="ci" maxlength="24" autocomplete="off" placeholder="例：本日のニュースは以上です"><button class="btn red">決定</button><button class="btn" type="button" id="skip">セリフなし</button></form>`);
   $('#ci').oninput = () => { caption = $('#ci').value.trim(); };
   $('#cf').onsubmit = (e) => { e.preventDefault(); caption = $('#ci').value.trim(); goDone(); };
@@ -778,7 +850,7 @@ function goDone() {
   setBar(`<div class="row"><button class="btn red" id="xq">𝕏にGIFで投稿 #物ボケ</button><button class="btn" id="local">この端末で友達に見せる</button></div>
     <div class="row"><button class="btn" id="copy">リンクをコピー</button><button class="btn" id="dl">GIFを保存</button><button class="btn" id="again">もう一回ボケる</button>
     <a class="home" href="${HASH_URL}" target="_blank" rel="noopener">みんなの #物ボケ</a></div>`);
-  $('#xq').onclick = () => postToX($('#xq'), gif, `【物ボケ】役：${roleName()}\nお題：${odaiText()}${caption ? `\n「${caption}」` : ''}\nこの物ボケにツッコんでくれ👇\n#物ボケ`, link);
+  $('#xq').onclick = () => postToX($('#xq'), gif, `【物ボケ】お題：${odaiText()}${roleName() ? `（役：${roleName()}）` : ''}\n${usedText()}${caption ? `\n「${caption}」` : ''}\nこの物ボケにツッコんでくれ👇\n#物ボケ`, link);
   $('#dl').onclick = () => gif.then(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'monoboke.gif'; a.click(); });
   $('#copy').onclick = async () => { try { await navigator.clipboard.writeText(link); $('#copy').textContent = 'コピーした！'; } catch { prompt('このリンクを送ってね', link); } };
   $('#local').onclick = () => goAnswerIntro(true);
@@ -787,7 +859,7 @@ function goDone() {
 function goAnswerIntro(local) {
   state = 'answer'; reveal = false; timerOn = false; tsukkomi = ''; rating = -1; answerDone = false; setBar(''); playStart = performance.now();
   showPanel(`<p class="big">${local ? '友達にわたしてね' : 'ツッコミ募集中！'}</p>
-    <p class="sub">役：${esc(roleName())}</p><p>お題：${esc(odaiText())}</p>
+    <p>お題：${esc(odaiText())}${roleName() ? `（役：${esc(roleName())}）` : ''}</p>${usedK >= 0 ? `<p class="sub">${esc(usedText())}</p>` : ''}
     <p class="sub">${REC_SEC}秒の物ボケを見て、${ANSWER_SEC}秒でツッコミを書く。</p>
     <div class="row"><button class="btn red" id="st">見る</button></div>
     ${local ? '' : '<p class="sub" style="margin-top:10px"><a class="home" href="#" id="mine">自分もボケる</a></p>'}`);
@@ -814,7 +886,7 @@ function rate(r) {
   setBar(`<div class="row"><button class="btn red" id="xs">この物ボケを𝕏で紹介 #物ボケ</button><button class="btn" id="ret">ボケた人にツッコミを返す</button></div>
     <div class="row"><button class="btn" id="mine">自分もボケる</button><a class="home" href="${HASH_URL}" target="_blank" rel="noopener">みんなの #物ボケ</a></div>`);
   $('#ret').onclick = async () => { try { await navigator.clipboard.writeText(back); $('#ret').textContent = 'リンクをコピーした！ 送ってね'; } catch { prompt('このリンクをボケた人に送ってね', back); } };
-  $('#xs').onclick = () => postToX($('#xs'), gif, `【物ボケ】${roleName()}が、${odaiText().replace(/として使え$/, 'として使う')}\nツッコミ：「${tsukkomi}」→ ${RATINGS[r][1]}${RATINGS[r][0]}\nあなたもツッコんで👇\n#物ボケ`, link);
+  $('#xs').onclick = () => postToX($('#xs'), gif, `【物ボケ】お題：${odaiText()}\n${usedText()}\nツッコミ：「${tsukkomi}」→ ${RATINGS[r][1]}${RATINGS[r][0]}\nあなたもツッコんで👇\n#物ボケ`, link);
   $('#mine').onclick = goChoose;
 }
 function goReply(rp) {
@@ -822,7 +894,7 @@ function goReply(rp) {
   const link = GAME_URL + '#p=' + encodeBoke(), gif = makeGif(true);
   setBar(`<div class="msg">あなたのボケに、ツッコミが届いた！</div>
     <div class="row"><button class="btn red" id="xs">ツッコミ付きで𝕏に投稿 #物ボケ</button><button class="btn" id="mine">もう一回ボケる</button></div>`);
-  $('#xs').onclick = () => postToX($('#xs'), gif, `【物ボケ】${roleName()}が、${odaiText().replace(/として使え$/, 'として使う')}\n届いたツッコミ：「${tsukkomi}」→ ${RATINGS[rating] ? RATINGS[rating][1] + RATINGS[rating][0] : ''}\n#物ボケ`, link);
+  $('#xs').onclick = () => postToX($('#xs'), gif, `【物ボケ】お題：${odaiText()}\n${usedText()}\n届いたツッコミ：「${tsukkomi}」→ ${RATINGS[rating] ? RATINGS[rating][1] + RATINGS[rating][0] : ''}\n#物ボケ`, link);
   $('#mine').onclick = goChoose;
 }
 
@@ -938,7 +1010,7 @@ function start() {
   const hp = new URLSearchParams(location.hash.slice(1)), d = hp.get('p') && decodeBoke(hp.get('p'));
   if (d) {
     caption = d.caption; scene = d.scene; propIds = d.propIds; facing = d.facing; dir = d.dir; rec = d.rec;
-    roleIdx = d.roleIdx; mainK = d.mainK; useIdx = d.useIdx; buildWorld();
+    actIdx = d.actIdx; roleIdx = d.roleIdx; usedK = d.usedK; buildWorld();
     const rp = hp.get('r') && decodeReply(hp.get('r'));
     if (rp) goReply(rp); else goAnswerIntro(false);
   } else goTitle();
@@ -946,7 +1018,7 @@ function start() {
 }
 start();
 window.__boke = { get state() { return state; }, get rec() { return rec; }, get props() { return props; }, get parts() { return parts; }, get grips() { return grips; },
-  encodeBoke, decodeBoke, scramble, goCount, stopRec, makeGif, setOdai: (r, k, u) => { roleIdx = r; mainK = k; useIdx = u; }, get undo() { return undoStack.length; }, get jointTargets() { return jointTargets; }, relAngle, setScene: (sc, ids) => { scene = sc; propIds = ids; buildWorld(); }, setFacing: (f, d) => { facing = f; dir = d; } };
+  encodeBoke, decodeBoke, scramble, goCount, stopRec, makeGif, setOdai: (a, r) => { actIdx = a; roleIdx = r; }, get view() { return { s, ox, oy }; }, setFace: (f) => { face = f; }, get undo() { return undoStack.length; }, get jointTargets() { return jointTargets; }, relAngle, setScene: (sc, ids) => { scene = sc; propIds = ids; buildWorld(); }, setFacing: (f, d) => { facing = f; dir = d; } };
 </script>
 </body>
 </html>
