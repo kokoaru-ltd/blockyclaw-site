@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BLIND POUR | BLOCKYCLAW</title>
+<title>ふちまで注げ | BLOCKYCLAW</title>
 <meta name="description" content="目隠しで注げ。音だけを頼りに、グラスのふちぎりぎりを狙う。">
-<meta property="og:title" content="BLIND POUR">
+<meta property="og:title" content="ふちまで注げ">
 <meta property="og:description" content="目隠しで注げ。音だけを頼りに、グラスのふちぎりぎりを狙う。">
 <meta property="og:image" content="https://kokoaru-ltd.github.io/blockyclaw-site/thumbs/blind-pour.jpg">
 <meta name="twitter:card" content="summary_large_image">
@@ -57,7 +57,7 @@
 <body>
 <div id="hud">
   <div class="card">
-    <h1>BLIND POUR</h1>
+    <h1>ふちまで注げ</h1>
     <div class="sub">長押しで注ぐ。押している間は目隠し。<br>音だけで、ふちぎりぎりを狙え。🎧推奨</div>
     <label><input type="checkbox" id="practice"> 練習モード（目隠しなし）</label>
     <a class="home" href="../">← BLOCKYCLAW</a>
@@ -457,7 +457,7 @@ function rankOf(mm) {
 function shareText() {
   const r = lastResult;
   const how = r.practice ? '練習モードで注いだ結果' : '目隠しで、音だけで注いだ結果';
-  return `🥃 BLIND POUR\n${how}…\n【${r.rank}】${r.sub} ${r.main}（${r.glass}）\n\nあなたの耳は何mm？🎧\n#BLINDPOUR`;
+  return `🥃 ふちまで注げ\n${how}…\n【${r.rank}】${r.sub} ${r.main}（${r.glass}）\n\nあなたの耳は何mm？🎧\n#ふちまで注げ`;
 }
 function cardCanvas() {
   const W = 1200, H = 630, c = document.createElement('canvas'); c.width = W; c.height = H;
@@ -474,7 +474,7 @@ function cardCanvas() {
     g.fillStyle = fade; g.fillRect(440, 0, 160, H);
   }
   const r = lastResult, x = 640, font = '"Noto Sans JP","Hiragino Sans","Yu Gothic UI",system-ui,sans-serif';
-  g.fillStyle = '#a29e95'; g.font = `700 26px ${font}`; g.fillText('BLIND POUR', x, 92);
+  g.fillStyle = '#a29e95'; g.font = `700 26px ${font}`; g.fillText('ふちまで注げ', x, 92);
   g.fillText(r.practice ? '練習モード' : '目隠しで、音だけで注いだ', x, 132);
   g.fillStyle = '#ffcf4a'; g.font = `900 ${r.rank.length > 6 ? 46 : 60}px ${font}`; g.fillText(`【${r.rank}】`, x - 14, 250);
   g.fillStyle = '#a29e95'; g.font = `400 28px ${font}`; g.fillText(r.sub, x, 320);
