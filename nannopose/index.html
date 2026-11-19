@@ -94,7 +94,9 @@ const PROPS = [
     deco: (L, dot, ring) => { ring(0, -36, 22); L([[0, -58], [0, -14]]); L([[-22, -36], [22, -36]]); L([[-24, 60], [24, 60]], 3); } },
 ];
 
-const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const cv = document.getElementById('c'); let ctx = cv.getContext('2d'); // GIFを作るときは一時的に別のキャンバスに切り替える
+let clockOverride = null, gifRender = null, gifBusy = false;
+const nowMs = () => clockOverride ?? performance.now();
 const panel = document.getElementById('panel'), bar = document.getElementById('bar');
 let W, H, DPR, s = 1, ox = 0, oy = 0;
 let engine, parts = [], props = [], pins = [], grips = [], drag = null, grain;
@@ -485,10 +487,10 @@ function drawFx(v, vPrev, dtSec) {
     }
     if (p.prop !== undefined && sp > maxSp) { maxSp = sp; maxPt = p; }
   });
-  if (maxSp > 800 && maxPt && performance.now() - fx.wordAt > 700) { fx.wordAt = performance.now(); fx.wordPos = { x: maxPt.x, y: maxPt.y - 70 }; fx.word = ['ブンッ', 'シュッ', 'ビュン'][Math.floor(Math.random() * 3)]; }
+  if (maxSp > 800 && maxPt && nowMs() - fx.wordAt > 700) { fx.wordAt = nowMs(); fx.wordPos = { x: maxPt.x, y: maxPt.y - 70 }; fx.word = ['ブンッ', 'シュッ', 'ビュン'][Math.floor(Math.random() * 3)]; }
 }
 function drawWord() {
-  const age = (performance.now() - fx.wordAt) / 1000; if (age > 0.6 || !fx.word) return;
+  const age = (nowMs() - fx.wordAt) / 1000; if (age > 0.6 || !fx.word) return;
   ctx.save(); ctx.translate(fx.wordPos.x, fx.wordPos.y); ctx.rotate(-0.15); ctx.scale(1 + age * 0.4, 1 + age * 0.4); ctx.globalAlpha = 1 - age / 0.6;
   ctx.font = '44px Yomogi, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.lineWidth = 8; ctx.strokeStyle = SKIN; ctx.strokeText(fx.word, 0, 0); ctx.fillStyle = RED; ctx.fillText(fx.word, 0, 0);
@@ -532,6 +534,12 @@ function drawHud() {
     ctx.fillStyle = 'rgba(216,67,46,0.6)'; ctx.fillRect(SW / 2 - 200, 150, 400 * (1 - left / REC_SEC), 8); }
   if (tsukkomi && (state === 'answer' || state === 'reply') && reveal) bubble(tsukkomi);
   if (rating >= 0 && (state === 'answer' || state === 'reply')) stamp(RATINGS[rating][0]);
+  if (state === 'gif') { // GIF用：タイトル・（あれば）ツッコミとハンコ・ハッシュタグ
+    card(scn, `「${caption}」`);
+    if (gifRender.withT && tsukkomi) { bubble(tsukkomi); if (rating >= 0) stamp(RATINGS[rating][0]); }
+    ctx.font = '26px Yomogi, sans-serif'; ctx.fillStyle = 'rgba(38,34,29,0.8)'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText('#物ボケ　物ボケ人形', SW - 24, SH - 26);
+  }
 }
 function bubble(text) {
   const lines = []; let cur = ''; for (const ch of text) { cur += ch; if ([...cur].length >= 11) { lines.push(cur); cur = ''; } } if (cur) lines.push(cur);
@@ -556,12 +564,12 @@ function viewAt(tSec) {
   const f = t / step, i = Math.min(S.length - 2, Math.floor(f)), u = Math.min(1, f - i), A = S[i], B = S[i + 1];
   return { tf: A.tf.map((a, k) => ({ x: a.x + (B.tf[k].x - a.x) * u, y: a.y + (B.tf[k].y - a.y) * u, a: lerpAng(a.a, B.tf[k].a, u) })), face: u < 0.5 ? A.face : B.face, pins: rec.pins };
 }
-function draw() {
+function draw(tPlay) {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H);
   // 再生のときは少しカメラを寄せる
-  const target = (state === 'review' || state === 'answer' || state === 'reply' || state === 'done' || state === 'caption') ? 1.07 : 1;
-  cam += (target - cam) * 0.08;
+  const target = (state === 'review' || state === 'answer' || state === 'reply' || state === 'done' || state === 'caption' || state === 'gif') ? 1.07 : 1;
+  cam = state === 'gif' ? 1.07 : cam + (target - cam) * 0.08;
   ctx.setTransform(DPR * s * cam, 0, 0, DPR * s * cam, DPR * (ox + (1 - cam) * SW / 2 * s), DPR * (oy + (1 - cam) * 430 * s));
   drawScene();
   const live = state === 'prep' || state === 'count' || state === 'rec' || state === 'title' || state === 'choose';
@@ -571,16 +579,74 @@ function draw() {
     if (state === 'rec') drawFx(v, liveHist, 0.1);
     if (drag && !drag.body.isProp && state === 'prep') { const bp = drag.body.position, o = drag.c.pointB; drawTack({ x: bp.x + o.x, y: bp.y + o.y }, 0.5); }
   } else if (rec) {
-    const t = (performance.now() - playStart) / 1000, v = viewAt(t);
+    const t = tPlay ?? (performance.now() - playStart) / 1000, v = viewAt(t);
     drawView(v, false); drawFx(v, viewAt(Math.max(0, t - 0.1)), 0.1);
   }
   drawWord();
   ctx.setTransform(DPR * s, 0, 0, DPR * s, DPR * ox, DPR * oy);
   drawHud();
-  ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = ctx.createPattern(grain, 'repeat'); ctx.fillRect(0, 0, W, H);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (state !== 'gif') { ctx.fillStyle = ctx.createPattern(grain, 'repeat'); ctx.fillRect(0, 0, W, H); } // GIFは紙のざらつきなし（軽くするため）
   if (flash > 0) { ctx.fillStyle = `rgba(255,255,255,${flash})`; ctx.fillRect(0, 0, W, H); }
 }
 let liveHist = null, liveHistAt = 0;
+
+// ---------- GIFを作る（3秒の物ボケを、絵ごと書き出す） ----------
+let gifQueue = Promise.resolve();
+function makeGif(withT) { gifQueue = gifQueue.then(() => renderGif(withT)); return gifQueue; }
+async function renderGif(withT) {
+  const { GIFEncoder, quantize, applyPalette } = await import('https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.esm.js');
+  const GW = 560, GH = 420, FPS = 12;
+  const oc = document.createElement('canvas'); oc.width = GW; oc.height = GH;
+  const octx = oc.getContext('2d', { willReadFrequently: true });
+  const saved = { ctx, W, H, DPR, s, ox, oy, cam, state, flash, boil };
+  const total = (rec.samples.length - 1) / REC_FPS + 0.6, n = Math.ceil(total * FPS);
+  const enc = GIFEncoder(); let palette = null; const base = 1e7;
+  gifBusy = true;
+  try {
+    for (let i = 0; i < n; i++) {
+      ctx = octx; W = GW; H = GH; DPR = 1; s = Math.min(GW / SW, GH / SH); ox = (GW - SW * s) / 2; oy = (GH - SH * s) / 2; flash = 0;
+      gifRender = { withT }; state = 'gif';
+      if (i === 0) fx.wordAt = -1e9;
+      clockOverride = base + i * 1000 / FPS; boil = Math.floor(clockOverride / 130);
+      draw(i / FPS);
+      const { data } = octx.getImageData(0, 0, GW, GH);
+      if (!palette) palette = quantize(data, 256);
+      enc.writeFrame(applyPalette(data, palette), GW, GH, i === 0 ? { palette, delay: Math.round(1000 / FPS), repeat: 0 } : { delay: Math.round(1000 / FPS) });
+      ({ ctx, W, H, DPR, s, ox, oy, cam, state, flash, boil } = saved); gifRender = null; clockOverride = null;
+      if (i % 3 === 2) await new Promise(r => setTimeout(r, 0)); // 画面を止めすぎない
+    }
+  } finally {
+    ({ ctx, W, H, DPR, s, ox, oy, cam, state, flash, boil } = saved); gifRender = null; clockOverride = null; gifBusy = false; fx.wordAt = -1e9;
+  }
+  enc.finish();
+  return new Blob([enc.bytes()], { type: 'image/gif' });
+}
+const HASH_URL = 'https://x.com/search?q=%23%E7%89%A9%E3%83%9C%E3%82%B1&f=live';
+const isPhone = () => matchMedia('(pointer: coarse)').matches && !!navigator.canShare;
+// Xに投稿：スマホは共有シートにGIFごと渡す。PCはGIFを保存して、Xの投稿画面を開く
+function postToX(btn, gifPromise, text, url) {
+  const label = btn.textContent;
+  const win = isPhone() ? null : window.open('about:blank', '_blank'); // 先に開いておく（あとからだとブロックされる）
+  btn.disabled = true; btn.textContent = 'GIFを用意しています…';
+  gifPromise.then(async (blob) => {
+    const file = new File([blob], 'monoboke.gif', { type: 'image/gif' });
+    if (!win && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], text: text + '\n' + url }); } catch {}
+    } else {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'monoboke.gif'; a.click();
+      const intent = 'https://twitter.com/intent/tweet?' + new URLSearchParams({ text, url }).toString();
+      if (win) { win.opener = null; win.location.href = intent; } else window.open(intent, '_blank', 'noopener');
+      toast('GIFを保存しました。開いたXの投稿画面で、そのGIFを添付してください');
+    }
+  }).catch(() => { if (win) win.close(); toast('GIFを作れませんでした。もう一度ためしてください'); })
+    .finally(() => { btn.disabled = false; btn.textContent = label; });
+}
+function toast(msg) {
+  let el = document.getElementById('toast');
+  if (!el) { el = document.createElement('div'); el.id = 'toast'; el.style.cssText = 'position:fixed;left:50%;top:16px;transform:translateX(-50%);background:#26221d;color:#fffdf6;padding:10px 16px;border-radius:12px;font-size:16px;z-index:9;max-width:calc(100vw - 32px);text-align:center'; document.body.appendChild(el); }
+  el.textContent = msg; el.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => el.style.display = 'none', 6000);
+}
 
 // ---------- 画面の流れ ----------
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -598,7 +664,7 @@ function goTitle() {
     <p class="sub">ぐにゃぐにゃ人形と、ひいた道具で物ボケ。<br>3秒の動きにして送れば、友達がツッコんでくれる。</p>
     <div class="row"><button class="btn red" id="go">ボケる</button></div>
     <p class="sub" style="margin-top:12px">準備${PREP_SEC}秒 → 本番${REC_SEC}秒 → タイトル → 友達が${ANSWER_SEC}秒でツッコむ</p>
-    <a class="home" href="../">← BLOCKYCLAW</a>`);
+    <p class="sub"><a class="home" href="${HASH_URL}" target="_blank" rel="noopener">みんなの #物ボケ を見る</a>　<a class="home" href="../">← BLOCKYCLAW</a></p>`);
   setBar(''); $('#go').onclick = goChoose;
 }
 function goChoose() {
@@ -651,9 +717,12 @@ function goCaption() {
 function goDone() {
   state = 'done';
   const link = GAME_URL + '#p=' + encodeBoke();
-  setBar(`<div class="row"><button class="btn red" id="xq">𝕏でツッコミ募集</button><button class="btn" id="local">この端末で友達に見せる</button></div>
-    <div class="row"><button class="btn" id="copy">リンクをコピー</button><button class="btn" id="again">もう一回ボケる</button></div>`);
-  $('#xq').onclick = () => xIntent(`【物ボケ人形】場面：${SCENES[scene][0]}　道具：${propNames()}\nこの物ボケに、ツッコんでください🙏\n#物ボケ人形`, link);
+  const gif = makeGif(false); // 先に作り始めておく
+  setBar(`<div class="row"><button class="btn red" id="xq">𝕏にGIFで投稿 #物ボケ</button><button class="btn" id="local">この端末で友達に見せる</button></div>
+    <div class="row"><button class="btn" id="copy">リンクをコピー</button><button class="btn" id="dl">GIFを保存</button><button class="btn" id="again">もう一回ボケる</button>
+    <a class="home" href="${HASH_URL}" target="_blank" rel="noopener">みんなの #物ボケ</a></div>`);
+  $('#xq').onclick = () => postToX($('#xq'), gif, `【物ボケ】場面：${SCENES[scene][0]}　道具：${propNames()}\n「${caption}」\nこの物ボケにツッコんでくれ👇\n#物ボケ`, link);
+  $('#dl').onclick = () => gif.then(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'monoboke.gif'; a.click(); });
   $('#copy').onclick = async () => { try { await navigator.clipboard.writeText(link); $('#copy').textContent = 'コピーした！'; } catch { prompt('このリンクを送ってね', link); } };
   $('#local').onclick = () => goAnswerIntro(true);
   $('#again').onclick = goChoose;
@@ -683,14 +752,19 @@ function submitTsukkomi(v) {
 function rate(r) {
   rating = r; flash = 0.3;
   const link = GAME_URL + '#p=' + encodeBoke(), back = link + '&r=' + scramble(tsukkomi) + '~' + r;
-  setBar(`<div class="row"><button class="btn red" id="ret">ボケた人にツッコミを返す</button><button class="btn" id="xs">𝕏で言う</button><button class="btn" id="mine">自分もボケる</button></div>`);
+  const gif = makeGif(true); // ツッコミとハンコ入りのGIF
+  setBar(`<div class="row"><button class="btn red" id="xs">この物ボケを𝕏で紹介 #物ボケ</button><button class="btn" id="ret">ボケた人にツッコミを返す</button></div>
+    <div class="row"><button class="btn" id="mine">自分もボケる</button><a class="home" href="${HASH_URL}" target="_blank" rel="noopener">みんなの #物ボケ</a></div>`);
   $('#ret').onclick = async () => { try { await navigator.clipboard.writeText(back); $('#ret').textContent = 'リンクをコピーした！ 送ってね'; } catch { prompt('このリンクをボケた人に送ってね', back); } };
-  $('#xs').onclick = () => xIntent(`【物ボケ人形】ボケ「${caption}」\nわたしのツッコミ：「${tsukkomi}」→ ${RATINGS[r][1]}${RATINGS[r][0]}\n#物ボケ人形`, link);
+  $('#xs').onclick = () => postToX($('#xs'), gif, `【物ボケ】「${caption}」\nツッコミ：「${tsukkomi}」→ ${RATINGS[r][1]}${RATINGS[r][0]}\nあなたもツッコんで👇\n#物ボケ`, link);
   $('#mine').onclick = goChoose;
 }
 function goReply(rp) {
   state = 'reply'; reveal = true; tsukkomi = rp.tsukkomi; rating = RATINGS[rp.rating] ? rp.rating : -1; timerOn = false; playStart = performance.now();
-  setBar(`<div class="msg">あなたのボケに、ツッコミが届いた！</div><div class="row"><button class="btn red" id="mine">もう一回ボケる</button></div>`);
+  const link = GAME_URL + '#p=' + encodeBoke(), gif = makeGif(true);
+  setBar(`<div class="msg">あなたのボケに、ツッコミが届いた！</div>
+    <div class="row"><button class="btn red" id="xs">ツッコミ付きで𝕏に投稿 #物ボケ</button><button class="btn" id="mine">もう一回ボケる</button></div>`);
+  $('#xs').onclick = () => postToX($('#xs'), gif, `【物ボケ】「${caption}」\n届いたツッコミ：「${tsukkomi}」→ ${RATINGS[rating] ? RATINGS[rating][1] + RATINGS[rating][0] : ''}\n#物ボケ`, link);
   $('#mine').onclick = goChoose;
 }
 
@@ -745,7 +819,7 @@ function start() {
 }
 start();
 window.__boke = { get state() { return state; }, get rec() { return rec; }, get props() { return props; }, get parts() { return parts; }, get grips() { return grips; },
-  encodeBoke, decodeBoke, scramble, goCount, stopRec, setScene: (sc, ids) => { scene = sc; propIds = ids; buildWorld(); }, setFacing: (f, d) => { facing = f; dir = d; } };
+  encodeBoke, decodeBoke, scramble, goCount, stopRec, makeGif, setScene: (sc, ids) => { scene = sc; propIds = ids; buildWorld(); }, setFacing: (f, d) => { facing = f; dir = d; } };
 </script>
 </body>
 </html>
