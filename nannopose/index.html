@@ -80,7 +80,7 @@ const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 const panel = document.getElementById('panel'), bar = document.getElementById('bar');
 let W, H, DPR, s = 1, ox = 0, oy = 0;
 let engine, parts = [], props = [], pins = [], drag = null, grain;
-let state = 'title', odaiIdx = 0, face = 'normal', timeLeft = 0, timerOn = false, reveal = false, hideOdai = false;
+let state = 'title', odai = { t: '', alts: [] }, face = 'normal', timeLeft = 0, timerOn = false, reveal = false, hideOdai = false;
 let frames = [], playStart = 0, flash = 0, answerStartAt = 0, answerDone = false, tries = [];
 
 // ---------- 手描き風の線 ----------
@@ -163,21 +163,28 @@ function snapshot() {
   const v = liveView();
   return { tf: v.tf.map(t => ({ x: Math.round(t.x), y: Math.round(t.y), a: Math.round(t.a * 100) / 100 })), face, pins: v.pins.map(p => ({ x: Math.round(p.x), y: Math.round(p.y) })) };
 }
-function encodeFrames() {
-  const key = (odaiIdx * 7 + 13) % 997;
-  const out = ['2', key, frames.length];
-  for (const f of frames) {
-    out.push(FACES.findIndex(x => x[0] === f.face), f.pins.length);
-    f.pins.forEach(p => out.push(p.x, p.y));
-    f.tf.forEach(t => out.push(t.x, t.y, Math.round(t.a * 100)));
-  }
-  return out.join('.');
+// お題の文字は、リンクを見ただけでは読めないように混ぜてから入れる
+const SCR = [0x5b, 0x1f, 0xa7, 0x33, 0xc9, 0x6e, 0x81, 0x24];
+function scramble(text) {
+  const b = new TextEncoder().encode(text).map((v, i) => v ^ SCR[i % SCR.length]);
+  return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-function decodeFrames(str) {
-  const a = str.split('.').map(Number); if (a.some(isNaN) || a[0] !== 2) return null;
-  let i = 1; const key = a[i++], n = a[i++]; let idx = -1;
-  for (let k = 0; k < ODAI.length; k++) if ((k * 7 + 13) % 997 === key) idx = k;
-  if (idx < 0 || n < 1 || n > MAX_FRAMES) return null;
+function unscramble(code) {
+  const bin = atob(code.replace(/-/g, '+').replace(/_/g, '/'));
+  const b = Uint8Array.from(bin, (c, i) => c.charCodeAt(0) ^ SCR[i % SCR.length]);
+  return new TextDecoder().decode(b);
+}
+function encodeFrames() {
+  const nums = [frames.length];
+  for (const f of frames) {
+    nums.push(FACES.findIndex(x => x[0] === f.face), f.pins.length);
+    f.pins.forEach(p => nums.push(p.x, p.y));
+    f.tf.forEach(t => nums.push(t.x, t.y, Math.round(t.a * 100)));
+  }
+  return ['3', scramble(odai.t), scramble(odai.alts.join(',')), nums.join('.')].join('~');
+}
+function readFrames(a, i) {
+  const n = a[i++]; if (!(n >= 1 && n <= MAX_FRAMES)) return null;
   const fs = [];
   for (let f = 0; f < n; f++) {
     const fc = (FACES[a[i++]] || FACES[0])[0], np = a[i++], pinsArr = [];
@@ -186,7 +193,21 @@ function decodeFrames(str) {
     if (tf.some(t => isNaN(t.x) || isNaN(t.a))) return null;
     fs.push({ face: fc, pins: pinsArr, tf });
   }
-  return { idx, frames: fs };
+  return fs;
+}
+function decodeFrames(str) {
+  try {
+    if (str.startsWith('3~')) { // 自由入力のお題
+      const [, p, al, rest] = str.split('~');
+      const t = unscramble(p).trim(); if (!t) return null;
+      const fs = readFrames(rest.split('.').map(Number), 0); if (!fs) return null;
+      return { odai: { t, alts: unscramble(al || '').split(',').map(x => x.trim()).filter(Boolean) }, frames: fs };
+    }
+    const a = str.split('.').map(Number); if (a.some(isNaN) || a[0] !== 2) return null; // 前の版のリンク
+    let idx = -1; for (let k = 0; k < ODAI.length; k++) if ((k * 7 + 13) % 997 === a[1]) idx = k;
+    const fs = readFrames(a, 2); if (idx < 0 || !fs) return null;
+    return { odai: { t: ODAI[idx][0], alts: [] }, frames: fs };
+  } catch { return null; }
 }
 
 // ---------- 画びょう・つかむ ----------
@@ -295,17 +316,18 @@ function drawTack(p, alpha = 1, seed = 90) {
   ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.beginPath(); ctx.arc(p.x - 3, p.y - 3, 2.4, 0, 6.3); ctx.fill(); ctx.globalAlpha = 1;
 }
 function drawOdaiCard() {
-  if (state === 'title') return;
+  if (state === 'title' || state === 'choose') return;
   const w = 520, x = SW / 2 - w / 2, y = 18, h = 92;
   ctx.save(); ctx.translate(SW / 2, y + h / 2); ctx.rotate(-0.012); ctx.translate(-SW / 2, -(y + h / 2));
   sketch([[x, y], [x + w / 2, y - 2], [x + w, y], [x + w + 2, y + h / 2], [x + w, y + h], [x + w / 2, y + h + 2], [x, y + h], [x - 2, y + h / 2]], 80, { fill: SKIN, width: 2.6, amp: 1 });
   ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const hidden = (state === 'answer' && !reveal) || hideOdai;
   ctx.font = '17px Yomogi, sans-serif'; ctx.fillText(hidden ? 'この動き、なんのお題？' : 'お題', SW / 2, y + 22);
-  let text = ODAI[odaiIdx][0];
+  let text = odai.t;
   if (hidden) { // ヒント：時間がたつと文字数 → 1文字目
     const el = state === 'answer' && timerOn ? ANSWER_SEC - timeLeft : 0;
-    text = el >= 16 ? text[0] + '〇'.repeat(text.length - 1) : el >= 8 ? '〇'.repeat(text.length) : '？？？';
+    const ch = [...text]; // 絵文字なども1文字として数える
+    text = el >= 16 ? ch[0] + '〇'.repeat(ch.length - 1) : el >= 8 ? '〇'.repeat(ch.length) : '？？？';
   }
   let fs = 40; ctx.font = `${fs}px Yomogi, sans-serif`;
   while (ctx.measureText(text).width > w - 40 && fs > 18) { fs -= 2; ctx.font = `${fs}px Yomogi, sans-serif`; }
@@ -355,10 +377,11 @@ function norm(t) {
   return String(t).normalize('NFKC').toLowerCase().replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))
     .replace(/[\s!?！？、。・,.「」~〜]/g, '');
 }
-function isRight(guess, idx) {
+function isRight(guess, o = odai) {
   const g = norm(guess); if (!g) return false;
-  const [title, alt] = ODAI[idx], cands = [title, ...alt.split(',').filter(Boolean)].map(norm);
-  return cands.some(c => g === c) || g.includes(norm(title));
+  const preset = ODAI.find(x => norm(x[0]) === norm(o.t)); // 用意したお題と同じなら、その言い換えも使う
+  const cands = [o.t, ...o.alts, ...(preset ? preset[1].split(',').filter(Boolean) : [])].map(norm).filter(Boolean);
+  return cands.some(c => g === c || g.includes(c) || (c.includes(g) && [...g].length >= Math.max(2, Math.ceil([...c].length * 0.6))));
 }
 
 // ---------- 画面の流れ ----------
@@ -382,13 +405,25 @@ function goChoose() {
   state = 'choose'; frames = []; face = 'normal'; buildWorld(); timerOn = false;
   history.replaceState(null, '', location.pathname);
   const picks = []; while (picks.length < 3) { const k = Math.floor(Math.random() * ODAI.length); if (!picks.includes(k)) picks.push(k); }
-  showPanel(`<p class="big">お題をえらぶ</p><p class="sub">えらんだら${POSE_SEC}秒スタート</p>
-    <div class="cards">${picks.map(k => `<button class="btn" data-k="${k}">${esc(ODAI[k][0])}</button>`).join('')}</div>`);
+  showPanel(`<p class="big">お題を書く</p>
+    <form id="of" style="display:grid;gap:8px;margin-top:8px">
+      <input class="guess" id="ot" maxlength="20" autocomplete="off" placeholder="例：寝起きのライオン" style="width:auto">
+      <input class="guess" id="oa" maxlength="40" autocomplete="off" placeholder="別の言い方（なくてもOK）例：ライオン,らいおん" style="width:auto;font-size:15px">
+      <button class="btn red">これでスタート（${POSE_SEC}秒）</button>
+    </form>
+    <p class="sub" style="margin-top:10px">思いつかないときは：</p>
+    <div class="row" style="margin-top:4px">${picks.map(k => `<button class="btn" style="font-size:15px;padding:4px 10px" data-k="${k}">${esc(ODAI[k][0])}</button>`).join('')}</div>`);
   setBar('');
-  panel.querySelectorAll('[data-k]').forEach(b => b.onclick = () => goPose(Number(b.dataset.k)));
+  panel.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { $('#ot').value = ODAI[Number(b.dataset.k)][0]; $('#ot').focus(); });
+  $('#of').onsubmit = (e) => {
+    e.preventDefault();
+    const t = $('#ot').value.trim(); if (!t) { $('#ot').focus(); return; }
+    goPose({ t, alts: $('#oa').value.split(/[,、，]/).map(x => x.trim()).filter(Boolean) });
+  };
+  $('#ot').focus();
 }
-function goPose(k) {
-  state = 'pose'; odaiIdx = k; timeLeft = POSE_SEC; timerOn = true; frames = []; hidePanel();
+function goPose(o) {
+  state = 'pose'; odai = o; timeLeft = POSE_SEC; timerOn = true; frames = []; hidePanel();
   setBar(`<div class="row faces">${FACES.map(([f, n]) => `<button class="btn ${f === face ? 'on' : ''}" data-f="${f}">${n}</button>`).join('')}</div>
     <div class="row"><button class="btn red" id="shot">コマを撮る（0/${MAX_FRAMES}）</button><button class="btn" id="done" disabled>できた！</button><button class="btn" id="unpin">画びょう全部ぬく</button></div>`);
   bar.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { face = b.dataset.f; bar.querySelectorAll('[data-f]').forEach(x => x.classList.toggle('on', x.dataset.f === face)); });
@@ -435,14 +470,14 @@ function startAnswer() {
 }
 function guess(v) {
   if (answerDone) return;
-  if (isRight(v, odaiIdx)) return endAnswer(true);
+  if (isRight(v)) return endAnswer(true);
   tries.push(v); $('#tries').innerHTML = tries.slice(-5).map(t => `<s>${esc(t)}</s>`).join('');
 }
 function endAnswer(ok) {
   if (answerDone) return; answerDone = true; timerOn = false; reveal = true;
   const t = (performance.now() - answerStartAt) / 1000;
   const rank = !ok ? '' : t < 5 ? '以心伝心' : t < 12 ? 'なかなかの読み' : 'ギリギリ伝わった';
-  const msg = ok ? `正解！ ${t.toFixed(1)}秒` : `時間切れ！ 正解は「${esc(ODAI[odaiIdx][0])}」`;
+  const msg = ok ? `正解！ ${t.toFixed(1)}秒` : `時間切れ！ 正解は「${esc(odai.t)}」`;
   const shareText = ok ? `「なんのポーズ？」に${t.toFixed(1)}秒で正解した！【${rank}】\nあなたも当ててみて👇\n#なんのポーズ`
     : `「なんのポーズ？」わからなかった…\nあなたは当てられる？👇\n#なんのポーズ`;
   const link = GAME_URL + '#p=' + encodeFrames();
@@ -474,8 +509,8 @@ addEventListener('resize', layout);
 function start() {
   if (!innerWidth || !innerHeight) { setTimeout(start, 100); return; }
   makeGrain(); layout();
-  const m = location.hash.match(/#p=([0-9.\-]+)/), d = m && decodeFrames(m[1]);
-  if (d) { buildWorld(); odaiIdx = d.idx; frames = d.frames; goAnswerIntro(false); } else goTitle();
+  const m = location.hash.match(/#p=([A-Za-z0-9_.~\-]+)/), d = m && decodeFrames(m[1]);
+  if (d) { buildWorld(); odai = d.odai; frames = d.frames; goAnswerIntro(false); } else goTitle();
   last = performance.now(); requestAnimationFrame(loop);
 }
 start();
