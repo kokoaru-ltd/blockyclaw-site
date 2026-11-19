@@ -172,6 +172,7 @@ function makeDoll(cx, cy) {
   J(pelvis, { x: 15, y: 16 }, thR, { x: 0, y: -30 }); J(thR, { x: 0, y: 32 }, shR, { x: 0, y: -31 });
   Composite.add(engine.world, [...parts.map(p => p.body), ...js]);
   addPin(head, { x: 0, y: -26 });
+  initTargets();
 }
 function makeProps() {
   const spots = [190, 790, 900];
@@ -201,6 +202,7 @@ function restorePrep(sv) {
   allBodies().forEach((b, i) => { const t = sv.bodies[i]; Body.setPosition(b, { x: t.x, y: t.y }); Body.setAngle(b, t.a); Body.setVelocity(b, { x: 0, y: 0 }); Body.setAngularVelocity(b, 0); });
   sv.pins.forEach(p => addPin(p.b, p.p));
   sv.grips.forEach(g => { const c = Constraint.create({ bodyA: g.a, pointA: g.pa, bodyB: g.b, pointB: g.pb, length: 0, stiffness: g.k, damping: 0.2 }); grips.push(c); Composite.add(engine.world, c); });
+  initTargets();
 }
 
 // ---------- 録画データ ----------
@@ -307,10 +309,14 @@ cv.addEventListener('pointermove', (e) => { if (!drag) return; const m = pos(e);
 function release() {
   if (!drag) return;
   const { c, body, fromPin, moved, t0 } = drag; Composite.remove(engine.world, c); drag = null;
-  if (state !== 'prep') return; // 本番中は離すだけ（その場でだらんとなる）
+  settle = { until: performance.now() + 250, set: chainOf(body), torso: ['chest', 'pelvis', 'head'].includes(body.label), body };
+  if (state !== 'prep') return; // 本番中は離すだけ（関節が固いので、その形で止まる）
   if (fromPin && !moved && performance.now() - t0 < 400) return;
+  const tap = !moved && performance.now() - t0 < 400;
+  if (tap) { addPin(body, { x: c.pointB.x, y: c.pointB.y }); return; } // タップしたときだけ画びょうを刺す
   const at = { x: body.position.x + c.pointB.x, y: body.position.y + c.pointB.y };
-  if (body.isProp) {
+  if (!body.isProp) return; // 人形はドラッグして離せば、その形で止まる
+  {
     const touching = parts.map(p => p.body).filter(b => Query.point([b], at).length);
     const hands = parts.filter(p => SHAPES[p.name][3] === 'hand').map(p => ({ b: p.body, e: endPoint(p.name, tfOf(p.body)) }));
     const nearHands = hands.filter(o => distToBody(body, o.e) < 26).map(o => o.b); // 両手が届いていれば両手で持つ
@@ -328,9 +334,7 @@ function release() {
       }
       flash = 0.25; return;
     }
-    addPin(body, { x: c.pointB.x, y: c.pointB.y }); return;
   }
-  addPin(body, { x: c.pointB.x, y: c.pointB.y });
 }
 cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release);
 
@@ -524,7 +528,7 @@ function drawHud() {
   if (state === 'caption' || state === 'done') card(`場面：${SCENES[scene][0]}`, caption ? `「${caption}」` : 'タイトルをつけてね');
   if (state === 'answer' || state === 'reply') card(scn, reveal ? `ボケ：「${caption}」` : 'この物ボケに、ツッコめ！');
   ctx.font = '16px Yomogi, sans-serif'; ctx.fillStyle = '#6b655c'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  if (state === 'prep') ctx.fillText(`道具を手に当てて離すと持つ（両手が届けば両手持ち）・画びょう あと${MAX_PINS - pins.length}本`, SW / 2, 134);
+  if (state === 'prep') ctx.fillText(`ドラッグで動かす（離すとその形で止まる）・タップで画びょう あと${MAX_PINS - pins.length}本・道具は手に当てて離すと持つ`, SW / 2, 134);
   if (state === 'prep' || state === 'answer') if (timerOn) timerDial(state === 'answer' ? ANSWER_SEC : PREP_SEC);
   if (state === 'count') { const n = 3 - Math.floor((performance.now() - countStart) / 700);
     ctx.save(); ctx.font = '150px Yomogi, sans-serif'; ctx.fillStyle = RED; ctx.lineWidth = 10; ctx.strokeStyle = SKIN; ctx.textAlign = 'center';
@@ -771,6 +775,74 @@ function goReply(rp) {
 // ---------- ループ ----------
 let last = 0;
 // 速すぎる動き・くるくる回るのを抑える。胴と頭はとくに回りにくくする
+// ---------- 固い関節（可動フィギュアのように、動かした形で止まる） ----------
+const PARENT = { head: 'chest', pelvis: 'chest', uaL: 'chest', faL: 'uaL', uaR: 'chest', faR: 'uaR', thL: 'pelvis', shL: 'thL', thR: 'pelvis', shR: 'thR' };
+let jointTargets = {};
+const bodyOf = (n) => parts.find(p => p.name === n).body;
+const relAngle = (n) => bodyOf(n).angle - bodyOf(PARENT[n]).angle;
+let chestTarget = 0;
+function initTargets() { jointTargets = {}; for (const n in PARENT) jointTargets[n] = relAngle(n); chestTarget = bodyOf('chest').angle; }
+let settle = { until: 0, set: new Set() }; // 離した直後は少しだけ自由にして、勢いが止まった形で固める
+function chainOf(body) {
+  const free = new Set();
+  const walk = (n) => { while (n && n !== 'chest') { free.add(n); n = PARENT[n]; } };
+  if (body.isProp) grips.filter(g => g.bodyB === body).forEach(g => walk(g.bodyA.label));
+  else walk(body.label);
+  return free;
+}
+function freeJoints() { // つかんでいる所から胴までの関節だけ自由に動く
+  if (drag) return chainOf(drag.body);
+  return performance.now() < settle.until ? settle.set : new Set();
+}
+// つかんでいる部分だけ動かし、それ以外の体はその場で固める（可動フィギュアの感覚）
+function movableParts() {
+  const set = new Set();
+  const src = drag ? drag.body : (performance.now() < settle.until ? settle.body : null);
+  if (!src) return set;
+  if (['chest', 'pelvis', 'head'].includes(src.label)) { PART_NAMES.forEach(n => set.add(n)); return set; } // 胴をつかんだら全身
+  chainOf(src).forEach(n => set.add(n));
+  return set;
+}
+function applyFreeze() {
+  const mov = movableParts();
+  for (const p of parts) {
+    const wantStatic = !mov.has(p.name);
+    if (p.body.isStatic !== wantStatic) { Body.setStatic(p.body, wantStatic); if (!wantStatic) { Body.setVelocity(p.body, { x: 0, y: 0 }); Body.setAngularVelocity(p.body, 0); } }
+  }
+}
+function holdJoints() {
+  applyFreeze();
+  const free = freeJoints(), K = 0.3, D = 0.55; // 大きいほど関節が固い
+  const settling = !drag && free.size > 0;
+  // 胴体：胴・腰・頭をつかんでいるときだけ向きが変わる。それ以外は今の角度のまま踏ん張る
+  const chest = bodyOf('chest'), torsoGrab = drag && ['chest', 'pelvis', 'head'].includes(drag.body.label);
+  if (chest.isStatic || torsoGrab || (performance.now() < settle.until && settle.torso)) chestTarget = chest.angle;
+  else {
+    let e = chestTarget - chest.angle; while (e > Math.PI) e -= 2 * Math.PI; while (e < -Math.PI) e += 2 * Math.PI;
+    Body.setAngularVelocity(chest, chest.angularVelocity + 0.35 * e - 0.5 * chest.angularVelocity);
+  }
+  for (const n in PARENT) {
+    const c = bodyOf(n), p = bodyOf(PARENT[n]);
+    if (c.isStatic || p.isStatic) { jointTargets[n] = c.angle - p.angle; continue; } // 固めている所は何もしない
+    if (free.has(n)) {
+      jointTargets[n] = c.angle - p.angle;
+      if (settling) { // 勢いだけ止める
+        const rv = (c.angularVelocity - p.angularVelocity) * 0.5, mc = c.mass, mp = p.mass;
+        Body.setAngularVelocity(c, c.angularVelocity - rv * mp / (mc + mp)); Body.setAngularVelocity(p, p.angularVelocity + rv * mc / (mc + mp));
+        for (const b of [c]) Body.setVelocity(b, { x: b.velocity.x * 0.7, y: b.velocity.y * 0.7 });
+      }
+      continue;
+    }
+    let err = jointTargets[n] - (c.angle - p.angle);
+    while (err > Math.PI) err -= 2 * Math.PI; while (err < -Math.PI) err += 2 * Math.PI;
+    // 持っている道具の重さも腕の重さに足す。戻す力には上限をつけて、行き過ぎ（振動・回転）を防ぐ
+    const held = grips.filter(g => g.bodyA === c).reduce((m, g, i, arr) => m + g.bodyB.mass / arr.length, 0);
+    const mc = c.mass + held, mp = p.mass;
+    const corr = Math.max(-0.035, Math.min(0.035, K * err - D * (c.angularVelocity - p.angularVelocity)));
+    Body.setAngularVelocity(c, c.angularVelocity + corr * mp / (mc + mp));
+    Body.setAngularVelocity(p, p.angularVelocity - corr * mc / (mc + mp));
+  }
+}
 function calm() {
   const MAXV = 13, MAXW = 0.22;
   for (const b of allBodies()) {
@@ -784,7 +856,7 @@ function calm() {
 }
 function loop(t) {
   const dt = Math.min(t - last, 33); last = t;
-  if (['prep', 'count', 'rec', 'title', 'choose'].includes(state)) { Engine.update(engine, dt); calm(); }
+  if (['prep', 'count', 'rec', 'title', 'choose'].includes(state)) { holdJoints(); Engine.update(engine, dt); calm(); }
   boil = Math.floor(t / 130); flash = Math.max(0, flash - dt / 250);
   if (timerOn) {
     timeLeft -= dt / 1000;
@@ -819,7 +891,7 @@ function start() {
 }
 start();
 window.__boke = { get state() { return state; }, get rec() { return rec; }, get props() { return props; }, get parts() { return parts; }, get grips() { return grips; },
-  encodeBoke, decodeBoke, scramble, goCount, stopRec, makeGif, setScene: (sc, ids) => { scene = sc; propIds = ids; buildWorld(); }, setFacing: (f, d) => { facing = f; dir = d; } };
+  encodeBoke, decodeBoke, scramble, goCount, stopRec, makeGif, get jointTargets() { return jointTargets; }, relAngle, setScene: (sc, ids) => { scene = sc; propIds = ids; buildWorld(); }, setFacing: (f, d) => { facing = f; dir = d; } };
 </script>
 </body>
 </html>
