@@ -12,5 +12,11 @@
 | おっ、開いてんじゃーん！ / aitenjan.mp3 | [お、あいてんじゃん](https://www.youtube.com/watch?v=Tp73YvMZoe0) | 冒頭約2.5秒 |
 | あぁ〜いいっすね〜 / iissune.mp3 | [あぁ＾〜いいっすね＾〜](https://www.youtube.com/watch?v=IThWiYA3XCA) | 約2秒 |
 | いいよ！来いよ！ / koiyo.mp3 | [YouTube 元動画](https://www.youtube.com/watch?v=324fzNNhlkI) | 冒頭約1.2秒の発言のみ |
+| そうだよ / soudayo.mp3 | [そうだよ(BB素材)](https://www.youtube.com/watch?v=xbe7XMt533E) | 約1.3秒、冒頭無音除去 |
+| 当たり前だよなぁ？ / atarimae.mp3 | [当たり前だよなぁ？ 素材](https://www.youtube.com/watch?v=eSJrD6uhWT0) | 約1.3秒、冒頭無音除去 |
+| まずいですよ！ / mazui.mp3 | [まずいですよ！](https://www.youtube.com/watch?v=Mi6MbC_MJwM) | 約1秒、冒頭無音除去 |
+| すっげぇ白くなってる、はっきりわかんだね / hakkiri.mp3 | [元動画](https://www.youtube.com/watch?v=mi8S9nV86co) | 約3.1秒、冒頭無音除去 |
+| ぬわぁ〜疲れたもぉ〜ん / tsukareta.mp3 | [元動画](https://www.youtube.com/watch?v=baRuwQuiQ-Q) | 約1.5秒、冒頭無音除去 |
+| いいゾ〜これ / iizokore.mp3 | [いいゾ〜これ](https://www.youtube.com/watch?v=p1TrhCIJQLs) | 約1秒、冒頭無音除去 |
 
 各音声はゲーム作者が録音したものではありません。公開元のフリーライセンス許諾は未確認で、同梱ライブラリのMIT/Apache-2.0とは別の扱いです。

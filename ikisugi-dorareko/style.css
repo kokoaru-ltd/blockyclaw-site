@@ -2,3 +2,5 @@
 @media(max-height:580px){.panel{padding:18px;max-height:95%;overflow:auto;left:4%;width:440px;max-width:92vw}h1{font-size:43px}h1 i{margin:8px 0;font-size:11px}.eyebrow{margin-bottom:8px}.panel p{margin:10px 0;font-size:11px}.instructions{margin:10px 0;gap:8px}.primary{padding:12px}.panel.small{left:50%}#touch{bottom:120px}.lead{font-size:17px!important}}
 
 .voice-preview{margin:12px 0;border-top:1px solid #75899740;padding-top:10px}.voice-preview summary{cursor:pointer;font-size:13px;color:#e1bd94}.voice-buttons{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:10px}.voice-buttons button{border:1px solid #82949f60;border-radius:3px;background:#253441;color:#e9e1d4;padding:8px 3px;font-size:11px;min-height:36px}.voice-buttons button:active{background:#ff9c66;color:#15212b}.voice-preview p{font-size:11px!important;margin:7px 0!important;color:#c1b5a7}.panel{max-height:94%;overflow:auto}
+
+#caption{white-space:normal;width:min(90vw,1100px);line-height:1.15;text-wrap:balance}
