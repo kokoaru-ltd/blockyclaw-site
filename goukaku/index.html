@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>合格発表 早押し</title>
+<meta name="description" content="合格発表の掲示板から、自分の受験番号を最速でさがせ。当たるたびにそっくりな番号が増えていく。">
+<meta property="og:title" content="合格発表 早押し">
+<meta property="og:description" content="合格発表の掲示板から、自分の受験番号を最速でさがせ。当たるたびにそっくりな番号が増えていく。">
+<meta property="og:image" content="https://kokoaru-ltd.github.io/blockyclaw-site/thumbs/goukaku.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../logo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700;900&family=Noto+Sans+JP:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --board:#2f4a3a; --paper:#fbfaf5; --ink:#141414; --sakura:#f4a7b9; --red:#d8343a; --gold:#e8b931; --ok:#1f8a4c;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{font-family:"Noto Sans JP",system-ui,sans-serif;background:linear-gradient(#bfe3f5,#e9f6fb 40%,#f7eef0);color:var(--ink);overflow-x:hidden}
+  .screen{display:none;min-height:100%}
+  .screen.on{display:flex;flex-direction:column}
+  /* タイトル */
+  #title,#result{align-items:center;justify-content:center;text-align:center;padding:32px 20px;gap:18px}
+  .petal{position:fixed;top:-20px;width:12px;height:10px;background:var(--sakura);border-radius:60% 0 60% 0;opacity:.8;pointer-events:none;animation:fall linear infinite}
+  @keyframes fall{to{transform:translateY(110vh) rotate(540deg)}}
+  .logo{font-family:"Noto Serif JP",serif;font-weight:900;font-size:clamp(40px,11vw,72px);line-height:1.05;margin:0;letter-spacing:.04em}
+  .logo small{display:block;font-size:.42em;letter-spacing:.3em;color:var(--red);margin-top:6px}
+  .rules{background:var(--paper);border:2px solid #222;border-radius:6px;padding:14px 18px;max-width:420px;text-align:left;font-size:15px;line-height:1.7;box-shadow:4px 4px 0 #222}
+  .rules b{color:var(--red)}
+  .btn{font:inherit;font-weight:900;font-size:22px;border:3px solid #111;background:var(--gold);color:#111;padding:14px 40px;border-radius:999px;box-shadow:0 5px 0 #111;cursor:pointer;touch-action:manipulation}
+  .btn:active{transform:translateY(4px);box-shadow:0 1px 0 #111}
+  .btn.sub{background:#fff;font-size:16px;padding:10px 24px}
+  .best{font-size:14px;color:#555}
+  /* ゲーム */
+  #game{min-height:100vh}
+  .hud{position:sticky;top:0;z-index:5;background:#111;color:#fff;padding:10px 14px 0}
+  .hudrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .mine{font-size:12px;letter-spacing:.15em;color:#bbb}
+  .mynum{font-family:"Noto Serif JP",serif;font-weight:900;font-size:40px;letter-spacing:.08em;line-height:1;color:var(--gold)}
+  .stat{text-align:right;font-size:13px;line-height:1.5}
+  .stat .sc{font-size:22px;font-weight:900}
+  .lives{color:var(--sakura);letter-spacing:2px}
+  .timer{height:8px;background:#333;margin:10px -14px 0}
+  .timer i{display:block;height:100%;width:100%;background:linear-gradient(90deg,var(--red),var(--gold));transform-origin:left}
+  .boardwrap{flex:1;background:var(--board);padding:14px 10px 100px;border-top:6px solid #6b4a2b}
+  .paper{background:var(--paper);max-width:640px;margin:0 auto;padding:14px 10px 18px;box-shadow:0 6px 14px rgba(0,0,0,.35);position:relative}
+  .paper:before,.paper:after{content:"";position:absolute;top:-6px;width:14px;height:14px;border-radius:50%;background:#c33;box-shadow:inset -2px -2px 0 rgba(0,0,0,.3)}
+  .paper:before{left:12px}.paper:after{right:12px}
+  .head{text-align:center;font-family:"Noto Serif JP",serif;font-weight:900;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:10px}
+  .head .u{font-size:13px;letter-spacing:.2em}
+  .head .t{font-size:22px;letter-spacing:.25em}
+  .head .lv{font-size:12px;color:var(--red);letter-spacing:.1em;margin-top:2px}
+  .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:2px 4px}
+  @media(min-width:520px){.grid{grid-template-columns:repeat(8,1fr)}}
+  .cell{font-family:"Noto Serif JP",serif;font-weight:700;font-size:21px;text-align:center;padding:9px 0;border:none;background:none;color:var(--ink);cursor:pointer;border-radius:4px;font-variant-numeric:tabular-nums;touch-action:manipulation}
+  .cell:active{background:#eee}
+  .cell.hit{background:var(--ok);color:#fff;animation:pop .35s}
+  .cell.miss{background:var(--red);color:#fff;animation:shake .3s}
+  .cell.reveal{outline:3px solid var(--ok);outline-offset:-3px}
+  @keyframes pop{50%{transform:scale(1.35)}}
+  @keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+  .nobtn{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:6;font:inherit;font-weight:900;font-size:18px;background:#fff;border:3px solid #111;border-radius:999px;padding:12px 26px;box-shadow:0 4px 0 #111;cursor:pointer;white-space:nowrap;touch-action:manipulation}
+  .nobtn:active{transform:translate(-50%,3px);box-shadow:0 1px 0 #111}
+  .flash{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0}
+  .flash.on{animation:fl .9s forwards}
+  .flash span{font-family:"Noto Serif JP",serif;font-weight:900;font-size:clamp(44px,14vw,96px);padding:6px 26px;border:6px solid currentColor;transform:rotate(-8deg);background:rgba(255,255,255,.92)}
+  .flash.good span{color:var(--red)}
+  .flash.bad span{color:#333}
+  .flash em{display:block;font-style:normal;font-size:.32em;text-align:center}
+  @keyframes fl{0%{opacity:0;transform:scale(1.6)}15%{opacity:1;transform:scale(1)}75%{opacity:1}100%{opacity:0}}
+  .mute{font-size:16px;background:none;border:1px solid #555;color:#fff;border-radius:6px;padding:0 6px;margin-top:2px;cursor:pointer}
+  body.hurry .hud{animation:hud .5s infinite}
+  body.hurry .timer i{animation:blink .25s infinite}
+  body.hurry .paper{animation:tremble .12s infinite}
+  @keyframes hud{50%{background:#5a0d10}}
+  @keyframes blink{50%{opacity:.35}}
+  @keyframes tremble{25%{transform:translate(1px,-1px)}75%{transform:translate(-1px,1px)}}
+  /* 結果 */
+  .rank{font-family:"Noto Serif JP",serif;font-weight:900;font-size:clamp(40px,12vw,68px);color:var(--red);border:6px solid var(--red);padding:4px 20px;transform:rotate(-6deg);background:rgba(255,255,255,.8)}
+  .rscore{font-size:20px;line-height:1.7}
+  .rscore b{font-size:34px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+  .copied{font-size:13px;color:var(--ok);min-height:1.2em}
+  .tag{font-size:11px;color:#777}
+  .home{font-size:13px;color:#333;text-decoration:none;border-bottom:1px solid #999}
+</style>
+</head>
+<body>
+
+<!-- タイトル -->
+<section id="title" class="screen on">
+  <h1 class="logo">合格発表<small>早押し</small></h1>
+  <div class="rules">
+    上に出る<b>あなたの受験番号</b>を、掲示板から<b>最速でタップ</b>。<br>
+    正解するたびに<b>そっくりな番号</b>が増えていきます。<br>
+    番号が見当たらなければ<b>「ない…」</b>を押す（たまに本当にない）。<br>
+    まちがい・時間切れで<b>♥</b>が減り、3つなくなると終了。
+  </div>
+  <button class="btn" id="startBtn">発表を見にいく</button>
+  <div class="best" id="bestTxt"></div>
+  <div class="tag">※ゲームです。実在の大学・試験とは関係ありません。🔊音あり</div>
+  <a class="home" href="../">← BLOCKYCLAW</a>
+</section>
+
+<!-- ゲーム -->
+<section id="game" class="screen">
+  <div class="hud">
+    <div class="hudrow">
+      <div>
+        <div class="mine">あなたの受験番号</div>
+        <div class="mynum" id="myNum">----</div>
+      </div>
+      <div class="stat">
+        <div class="sc" id="score">0</div>
+        <div class="lives" id="lives">♥♥♥</div>
+        <button class="mute" id="muteBtn" aria-label="音のオンオフ">🔊</button>
+      </div>
+    </div>
+    <div class="timer"><i id="bar"></i></div>
+  </div>
+  <div class="boardwrap">
+    <div class="paper">
+      <div class="head">
+        <div class="u">第一志望大学 一般選抜</div>
+        <div class="t">合格者受験番号</div>
+        <div class="lv" id="lvTxt"></div>
+      </div>
+      <div class="grid" id="grid"></div>
+    </div>
+  </div>
+  <button class="nobtn" id="noBtn">ない…</button>
+</section>
+
+<!-- 結果 -->
+<section id="result" class="screen">
+  <div class="rank" id="rank">補欠合格</div>
+  <div class="rscore">スコア <b id="rScore">0</b><br>正解 <span id="rCorrect">0</span> 問／最高 <span id="rLevel">1</span> 年目</div>
+  <div class="best" id="rBest"></div>
+  <div class="row">
+    <button class="btn" id="againBtn">もう一度受験</button>
+    <button class="btn sub" id="shareBtn">Xでシェア</button>
+    <button class="btn sub" id="copyBtn">結果をコピー</button>
+  </div>
+  <div class="copied" id="copied"></div>
+</section>
+
+<div class="flash" id="flash"><span id="flashTxt">合格</span></div>
+
+<!-- 純粋ロジック（DOMに触れない） -->
+<script id="logic">
+const SIMILAR = {
+  '0':['6','8','9'], '1':['7','4'], '2':['7','3','5'], '3':['8','5','2'], '4':['1','9'],
+  '5':['6','3','2'], '6':['5','8','0','9'], '7':['1','2'], '8':['3','6','0','9'], '9':['8','6','0','4']
+};
+const rnd = n => Math.floor(Math.random()*n);
+const pick = a => a[rnd(a.length)];
+
+// 正解番号に「似ている」番号を1つ作る
+function mutate(t){
+  const s = t.split('');
+  const k = rnd(3);
+  if (k === 0) {                // 隣どうしを入れ替え 3184 → 3148
+    const i = rnd(s.length-1); [s[i], s[i+1]] = [s[i+1], s[i]];
+  } else if (k === 1) {         // 見た目の似た数字に置換 3184 → 3164
+    const i = rnd(s.length); s[i] = pick(SIMILAR[s[i]]);
+  } else {                      // 末尾付近を ±1〜3
+    const n = parseInt(t,10) + pick([-3,-2,-1,1,2,3]) * (rnd(4)===0 ? 10 : 1);
+    return String(n);
+  }
+  return s.join('');
+}
+
+function levelParams(level){
+  return {
+    similars: Math.min(2 + level*2, 44),
+    total:    Math.min(25 + level*4, 90),
+    time:     Math.max(4.5, 9 - level*0.3),
+    absentRate: level >= 3 ? 0.2 : 0
+  };
+}
+
+function makeBoard(level){
+  const p = levelParams(level);
+  const target = String(1000 + rnd(9000));
+  const tn = parseInt(target,10);
+  const set = new Set();
+  const ok = x => /^[1-9]\d{3}$/.test(x) && x !== target && !set.has(x);
+  let tries = 0;
+  while (set.size < p.similars && tries++ < 2000) {
+    let x = mutate(target);
+    if (level >= 6 && rnd(2) === 0) x = mutate(x); // 上級は二重変形も混ぜる
+    if (ok(x)) set.add(x);
+  }
+  tries = 0;
+  const lo = Math.max(1000, tn-700), hi = Math.min(9999, tn+700);
+  while (set.size < p.total - 1 && tries++ < 5000) {
+    const x = String(lo + rnd(hi-lo+1));
+    if (ok(x)) set.add(x);
+  }
+  const absent = Math.random() < p.absentRate;
+  if (!absent) set.add(target);
+  const numbers = [...set].sort((a,b)=>a-b);
+  return { target, numbers, absent, time: p.time, similars: p.similars };
+}
+
+function rankFor(score, correct){
+  if (correct >= 20) return '首席合格';
+  if (correct >= 14) return '特待生合格';
+  if (correct >= 9)  return '現役合格';
+  if (correct >= 5)  return '補欠合格';
+  if (correct >= 2)  return '一浪決定';
+  return '二浪決定';
+}
+
+if (typeof module !== 'undefined') module.exports = { mutate, makeBoard, levelParams, rankFor };
+</script>
+
+<!-- 画面・入力 -->
+<script>
+(function(){
+  if (typeof document === 'undefined') return;
+  const $ = id => document.getElementById(id);
+  const store = {
+    get(){ try { return parseInt(localStorage.getItem('goukaku_best')||'0',10)||0 } catch(e){ return 0 } },
+    set(v){ try { localStorage.setItem('goukaku_best', String(v)) } catch(e){} }
+  };
+
+  // 花びら
+  for (let i=0;i<14;i++){
+    const p=document.createElement('div'); p.className='petal';
+    p.style.left=(Math.random()*100)+'vw';
+    p.style.animationDuration=(6+Math.random()*8)+'s';
+    p.style.animationDelay=(-Math.random()*10)+'s';
+    $('title').appendChild(p);
+  }
+
+  // ===== 効果音（すべてWebAudioで合成・音源ファイルなし） =====
+  const A = (()=>{
+    let ac=null, master=null, nbuf=null, muted=false, riser=null;
+    function init(){
+      try{
+        if(!ac){
+          ac=new (window.AudioContext||window.webkitAudioContext)();
+          const comp=ac.createDynamicsCompressor(); comp.threshold.value=-16; comp.ratio.value=8;
+          master=ac.createGain(); master.gain.value=.9; master.connect(comp); comp.connect(ac.destination);
+          nbuf=ac.createBuffer(1, ac.sampleRate*2, ac.sampleRate);
+          const d=nbuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+        }
+        if(ac.state==='suspended') ac.resume();
+      }catch(e){ ac=null; }
+    }
+    const on=()=>ac && !muted;
+    function env(g,t,peak,att,hold,rel){
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(peak,t+att);
+      g.gain.setValueAtTime(peak,t+att+hold);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+att+hold+rel);
+      return t+att+hold+rel;
+    }
+    function noise(t,{type='bandpass',freq=1000,q=1,peak=.3,att=.003,hold=0,rel=.05}={}){
+      const s=ac.createBufferSource(); s.buffer=nbuf; s.loop=true;
+      const f=ac.createBiquadFilter(); f.type=type; f.frequency.value=freq; f.Q.value=q;
+      const g=ac.createGain(); const end=env(g,t,peak,att,hold,rel);
+      s.connect(f); f.connect(g); g.connect(master);
+      s.start(t, Math.random()*1.5); s.stop(end+.02);
+    }
+    function tone(t,{type='sine',freq=440,to=null,glide=.1,peak=.2,att=.005,hold=0,rel=.1,lp=null}={}){
+      const o=ac.createOscillator(); o.type=type; o.frequency.setValueAtTime(freq,t);
+      if(to) o.frequency.exponentialRampToValueAtTime(to,t+glide);
+      const g=ac.createGain(); const end=env(g,t,peak,att,hold,rel);
+      let node=o;
+      if(lp){ const f=ac.createBiquadFilter(); f.type='lowpass'; f.frequency.value=lp; o.connect(f); node=f; }
+      node.connect(g); g.connect(master); o.start(t); o.stop(end+.02);
+    }
+
+    // チクタク：残り時間で音色と高さが変わる
+    let tickFlip=false;
+    function tick(rem){
+      if(!on()) return; const t=ac.currentTime; tickFlip=!tickFlip;
+      noise(t,{type:'highpass',freq:tickFlip?4200:3000,q:.7,peak:rem<3?.55:.35,rel:.03});
+      tone(t,{type:'sine',freq:tickFlip?1900:1500,peak:.06,rel:.04});
+      if(rem<3){ // 警告ピッ
+        tone(t,{type:'square',freq:rem<1.5?2093:1568,peak:.09,att:.002,hold:.05,rel:.03});
+      }
+    }
+    // 心音：残り3秒から
+    function heart(){
+      if(!on()) return; const t=ac.currentTime;
+      tone(t,{type:'sine',freq:90,to:45,glide:.12,peak:.7,att:.004,rel:.14});
+      tone(t+.17,{type:'sine',freq:80,to:40,glide:.12,peak:.5,att:.004,rel:.16});
+    }
+    // 迫り上がるうなり（ラウンド中ずっと鳴る）
+    function riserStart(dur){
+      if(!on()) return; riserStop(); const t=ac.currentTime;
+      const g=ac.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(.09,t+dur);
+      const f=ac.createBiquadFilter(); f.type='lowpass'; f.Q.value=6;
+      f.frequency.setValueAtTime(180,t); f.frequency.exponentialRampToValueAtTime(2600,t+dur);
+      const os=[0,7,-5].map(dt=>{ const o=ac.createOscillator(); o.type='sawtooth';
+        o.frequency.setValueAtTime(55,t); o.frequency.exponentialRampToValueAtTime(165,t+dur); o.detune.value=dt;
+        o.connect(f); o.start(t); return o; });
+      f.connect(g); g.connect(master); riser={g,os};
+    }
+    function riserStop(){
+      if(!riser||!ac) return; const t=ac.currentTime;
+      riser.g.gain.cancelScheduledValues(t); riser.g.gain.setValueAtTime(riser.g.gain.value,t);
+      riser.g.gain.exponentialRampToValueAtTime(0.0001,t+.06);
+      riser.os.forEach(o=>o.stop(t+.08)); riser=null;
+    }
+    // 歓声：ファンファーレ＋群衆の「わーっ」＋拍手＋指笛。power 1〜3で規模が変わる
+    function cheer(power){
+      if(!on()) return; const t=ac.currentTime; const p=Math.max(1,Math.min(3,power));
+      [523.25,659.25,783.99,1046.5].forEach((f,i)=>{
+        const last=i===3;
+        tone(t+i*.085,{type:'sawtooth',freq:f,peak:last?.16:.12,att:.01,hold:last?.35:.05,rel:last?.4:.06,lp:2400});
+        tone(t+i*.085,{type:'square',freq:f/2,peak:.05,att:.01,hold:last?.35:.05,rel:.2,lp:1200});
+      });
+      const len=.7+.35*p, start=t+.12;
+      // 群衆ノイズ（母音「あ」のフォルマント）
+      [[750,3,.45],[1200,4,.3],[2600,5,.12]].forEach(([fr,q,pk])=>
+        noise(start,{freq:fr,q,peak:pk*(.7+.15*p),att:.12,hold:len,rel:.9}));
+      // 人の声のかたまり
+      const voices=8+6*p;
+      for(let i=0;i<voices;i++){
+        const st=start+Math.random()*.15, base=170+Math.random()*260;
+        const o=ac.createOscillator(); o.type='sawtooth';
+        o.frequency.setValueAtTime(base,st); o.frequency.exponentialRampToValueAtTime(base*1.35,st+.25);
+        o.frequency.exponentialRampToValueAtTime(base*1.1,st+len+.6);
+        const lfo=ac.createOscillator(), lg=ac.createGain(); lfo.frequency.value=4.5+Math.random()*3; lg.gain.value=base*.03;
+        lfo.connect(lg); lg.connect(o.frequency);
+        const f1=ac.createBiquadFilter(); f1.type='bandpass'; f1.frequency.value=800; f1.Q.value=2.5;
+        const f2=ac.createBiquadFilter(); f2.type='bandpass'; f2.frequency.value=1250; f2.Q.value=3;
+        const g=ac.createGain(); const end=env(g,st,.05,.1+Math.random()*.1,len*.8,.7+Math.random()*.4);
+        o.connect(f1); o.connect(f2); f1.connect(g); f2.connect(g); g.connect(master);
+        o.start(st); lfo.start(st); o.stop(end+.05); lfo.stop(end+.05);
+      }
+      // 拍手
+      const claps=Math.round(22*p);
+      for(let i=0;i<claps;i++){
+        noise(start+.1+Math.random()*(len+.5),{freq:1100+Math.random()*1400,q:.9,peak:.12+Math.random()*.18,att:.002,rel:.035});
+      }
+      // 指笛（大きいときだけ）
+      if(p>=2){ const w=start+.25; tone(w,{type:'sine',freq:1800,to:2900,glide:.18,peak:.07,att:.02,hold:.12,rel:.1});
+        tone(w+.38,{type:'sine',freq:2900,to:1900,glide:.35,peak:.06,att:.02,hold:.1,rel:.2}); }
+    }
+    // 不正解：ブッブー＋客席の「あぁ…」
+    function boo(){
+      if(!on()) return; const t=ac.currentTime;
+      tone(t,{type:'square',freq:155,peak:.22,att:.005,hold:.12,rel:.04,lp:1400});
+      tone(t+.22,{type:'square',freq:155,peak:.22,att:.005,hold:.42,rel:.08,lp:1400});
+      for(let i=0;i<10;i++){
+        const st=t+.25+Math.random()*.1, base=220+Math.random()*160;
+        tone(st,{type:'sawtooth',freq:base,to:base*.62,glide:.9,peak:.025,att:.08,hold:.35,rel:.5,lp:1100});
+      }
+    }
+    return { init, tick, heart, riserStart, riserStop, cheer, boo,
+             toggle(){ muted=!muted; if(muted) riserStop(); return muted; } };
+  })();
+
+  let level, score, lives, correct, board, t0, raf, locked, nextTick, lastHeart, streak;
+
+  function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on', s.id===id)); }
+  function hearts(){ $('lives').textContent='♥'.repeat(lives)+'♡'.repeat(3-lives); }
+  function flash(txt, good, sub){
+    const f=$('flash'); $('flashTxt').innerHTML = txt + (sub?`<em>${sub}</em>`:'');
+    f.className='flash '+(good?'good':'bad'); void f.offsetWidth; f.classList.add('on');
+  }
+
+  function start(){
+    A.init(); level=0; score=0; lives=3; correct=0; streak=0;
+    $('score').textContent='0'; hearts(); show('game'); next();
+  }
+
+  function next(){
+    locked=false;
+    board = makeBoard(level);
+    $('myNum').textContent = board.target;
+    $('lvTxt').textContent = `${level+1}年目　似た番号 ${board.similars}件`;
+    const g=$('grid'); g.innerHTML='';
+    board.numbers.forEach(n=>{
+      const b=document.createElement('button'); b.className='cell'; b.textContent=n; b.dataset.n=n;
+      b.addEventListener('click',()=>answer(n,b));
+      g.appendChild(b);
+    });
+    window.scrollTo({top:0});
+    document.body.classList.remove('hurry');
+    nextTick=0; lastHeart=-1; A.riserStart(board.time);
+    t0=performance.now(); cancelAnimationFrame(raf); tick();
+  }
+
+  function tick(){
+    const el = (performance.now()-t0)/1000;
+    const left = 1 - el/board.time, rem = board.time - el;
+    $('bar').style.transform=`scaleX(${Math.max(0,left)})`;
+    if (el >= nextTick && rem > 0){
+      A.tick(rem);
+      nextTick += rem > 3 ? 1 : rem > 1.5 ? .5 : .25;
+    }
+    if (rem <= 3 && rem > 0){
+      document.body.classList.add('hurry');
+      const hb = Math.floor(el / (rem > 1.5 ? .75 : .5));
+      if (hb !== lastHeart){ lastHeart = hb; A.heart(); }
+    }
+    if (left<=0){ if(!locked) wrong('時間切れ'); return; }
+    raf=requestAnimationFrame(tick);
+  }
+
+  function answer(n, el){
+    if (locked) return;
+    if (n === board.target) right(el);
+    else { if(el) el.classList.add('miss'); wrong(n===null ? 'あったのに…' : '人の番号'); }
+  }
+
+  function right(el){
+    locked=true; cancelAnimationFrame(raf);
+    const left = Math.max(0, 1-(performance.now()-t0)/(board.time*1000));
+    const gain = 100 + Math.round(left*200) + level*20;
+    score+=gain; correct++; level++; streak++;
+    A.riserStop(); document.body.classList.remove('hurry');
+    A.cheer(1 + (left > .55 ? 1 : 0) + (streak >= 3 ? 1 : 0));
+    $('score').textContent=score;
+    if (el) el.classList.add('hit');
+    flash(board.absent ? '正解' : '合格', true, board.absent ? `本当になかった +${gain}` : `+${gain}`);
+    setTimeout(next, 950);
+  }
+
+  function wrong(why){
+    locked=true; cancelAnimationFrame(raf);
+    lives--; hearts(); streak=0;
+    A.riserStop(); A.boo(); document.body.classList.remove('hurry');
+    if (!board.absent){
+      const c=document.querySelector(`.cell[data-n="${board.target}"]`);
+      if (c){ c.classList.add('reveal'); c.scrollIntoView({block:'center',behavior:'smooth'}); }
+    }
+    flash('不合格', false, board.absent ? '実は番号なし' : why);
+    setTimeout(()=> lives>0 ? next() : end(), 1500);
+  }
+
+  function end(){
+    const best = Math.max(store.get(), score); store.set(best);
+    $('rank').textContent = rankFor(score, correct);
+    $('rScore').textContent = score;
+    $('rCorrect').textContent = correct;
+    $('rLevel').textContent = level+1;
+    $('rBest').textContent = `自己ベスト ${best}`;
+    $('copied').textContent='';
+    show('result');
+  }
+
+  $('noBtn').addEventListener('click',()=>{
+    if (locked) return;
+    if (board.absent) right(null); else answer(null, null);
+  });
+  $('muteBtn').addEventListener('click',()=>{ $('muteBtn').textContent = A.toggle() ? '🔇' : '🔊'; });
+  $('startBtn').addEventListener('click', start);
+  $('againBtn').addEventListener('click', start);
+  $('shareBtn').addEventListener('click',()=>{
+    const q=new URLSearchParams({text:`合格発表 早押しで「${$('rank').textContent}」\nスコア ${score}／正解 ${correct}問`, url:'https://kokoaru-ltd.github.io/blockyclaw-site/goukaku/'});
+    window.open('https://twitter.com/intent/tweet?'+q.toString(),'_blank','noopener');
+  });
+  $('copyBtn').addEventListener('click', async ()=>{
+    const txt = `合格発表 早押しで「${$('rank').textContent}」\nスコア ${score}／正解 ${correct}問\nhttps://kokoaru-ltd.github.io/blockyclaw-site/goukaku/`;
+    try{ await navigator.clipboard.writeText(txt); $('copied').textContent='コピーしました'; }
+    catch(e){ $('copied').textContent=txt; }
+  });
+  const b=store.get(); if(b) $('bestTxt').textContent=`自己ベスト ${b}`;
+})();
+</script>
+</body>
+</html>
