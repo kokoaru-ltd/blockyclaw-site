@@ -1,0 +1,14 @@
+const byId=id=>document.getElementById(id);
+const dialog=byId('optionsDialog'),open=byId('optionsOpen'),close=byId('optionsClose'),menuSound=byId('menuSound'),sound=byId('sound');
+open.addEventListener('click',()=>dialog.showModal());
+close.addEventListener('click',()=>dialog.close());
+dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)dialog.close();}});
+const syncSound=()=>{const enabled=sound.textContent.includes('ON');menuSound.textContent=enabled?'ON':'OFF';menuSound.setAttribute('aria-pressed',String(enabled));};
+menuSound.addEventListener('click',()=>{sound.click();syncSound();});
+new MutationObserver(syncSound).observe(sound,{childList:true,characterData:true,subtree:true});
+syncSound();
+byId('start').addEventListener('click',()=>dialog.close());
+window.addEventListener('keydown',event=>{if(event.code!=='Enter'||event.repeat||dialog.open||byId('panel').hidden||byId('start').disabled)return;const target=event.target;if(target===document.body||target===document.documentElement||target===byId('view')){event.preventDefault();byId('start').click();}});
+const syncReady=()=>{open.disabled=byId('start').disabled;};
+new MutationObserver(syncReady).observe(byId('start'),{attributes:true,attributeFilter:['disabled']});
+syncReady();

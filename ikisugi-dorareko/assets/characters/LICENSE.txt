@@ -1,0 +1,9 @@
+# Adult swimmer character
+
+SPDX-License-Identifier: CC0-1.0
+
+The character mesh is adapted from Innerscene's adult male MakeHuman base and the skin is adapted from MakeHuman Community's CC0 natural male skins. They are public-domain assets under Creative Commons CC0 1.0 Universal.
+
+Sources and modifications are recorded in PROVENANCE.md. The full CC0 legal text is at https://creativecommons.org/publicdomain/zero/1.0/legalcode .
+
+GLTFLoader.js is separate Three.js runtime code under MIT; see THREE-LICENSE.txt.

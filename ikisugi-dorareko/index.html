@@ -4,28 +4,51 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>イキスギドラレコ | BLOCKYCLAW</title>
-<meta name="description" content="通行人に接触しても、車に衝突しても即アウト。上がり続ける制限速度とともに60秒の完走を目指す、ドラレコ視点のドライブ・コメディ。">
+<meta name="description" content="カーブの続く街をドラレコ視点で走る。通行人・車・ガードレールへの接触で即終了。60秒、ぶつからずに走り切れ。">
 <meta property="og:title" content="イキスギドラレコ">
 <meta property="og:url" content="https://kokoaru-ltd.github.io/blockyclaw-site/ikisugi-dorareko/">
-<link rel="canonical" href="https://kokoaru-ltd.github.io/blockyclaw-site/ikisugi-dorareko/">
 <meta property="og:image" content="https://kokoaru-ltd.github.io/blockyclaw-site/thumbs/ikisugi-dorareko.jpg">
+<link rel="canonical" href="https://kokoaru-ltd.github.io/blockyclaw-site/ikisugi-dorareko/">
 <link rel="icon" href="../logo.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=20261122a">
 </head>
 <body>
-<main id="game" aria-label="イキスギドラレコ">
+<main id="game" class="inactive" aria-label="イキスギドラレコ">
   <canvas id="view" aria-label="3Dドライブ画面"></canvas>
   <div class="vignette"></div><div id="impact"></div>
-  <header id="hud"><div class="record"><b>● REC</b><span id="stamp">BLOCKY CAM / 00:00:00</span></div><div class="session"><span id="phase">夕焼け暴走区</span><b id="timer">60.0 <small>SEC</small></b></div><div class="points"><span>SURVIVAL SCORE</span><b id="score">00000</b></div></header>
-  <div id="caption" role="status" aria-live="polite"></div>
-  <div id="event"></div>
-  <div id="cockpit"><div class="dashline"></div><div class="gauge"><b id="speed">0</b><span>km/h</span><div class="speedbar"><i id="speedbar"></i></div></div><div class="limit"><span>制限速度</span><b id="limit">60</b></div><div class="trip"><span>走行距離 <b id="distance">0 m</b></span><span>最長フライト <b id="flight">0 m</b></span></div></div>
+  <header id="hud">
+    <div class="record"><b>● REC</b><span id="stamp">CAM 01 / 00:00:00</span></div>
+    <div class="session"><span id="phase">市街地</span><b id="timer">60.0 <small>SEC</small></b></div>
+    <div class="points"><span>走行スコア</span><b id="score">00000</b></div>
+  </header>
+  <div id="caption" role="status" aria-live="polite"></div><div id="event"></div>
+  <div id="cockpit"><div class="gauge"><b id="speed">0</b><span>km/h</span><div class="speedbar"><i id="speedbar"></i></div></div><div class="limit"><span>制限速度</span><b id="limit">60</b></div><div class="trip"><span>走行距離 <b id="distance">0 m</b></span><span>最長フライト <b id="flight">0 m</b></span></div></div>
   <div id="touch"><div><button data-key="ArrowLeft" aria-label="左へ">◀</button><button data-key="ArrowRight" aria-label="右へ">▶</button></div><div><button data-key="Space" aria-label="クラクション">♪</button><button data-key="ArrowDown" class="brake">ブレーキ</button><button data-key="ArrowUp" class="gas">アクセル</button></div></div>
-  <nav id="tools"><button id="pause" aria-label="一時停止">Ⅱ</button><button id="sound">音 ON</button><a href="audio/SOURCES.md" target="_blank" rel="noopener">音声出典</a><a href="../">ゲーム一覧</a></nav>
-  <section id="panel" class="panel"><div class="eyebrow">BLOCKYCLAW PRESENTS / DRIVE COMEDY</div><h1>イキスギ<span>ドラレコ</span><i>IKISUGI DASHCAM</i></h1><p class="lead">この街、全員、<strong>ぶっ飛んでる。</strong></p><p>信号無視もOK。制限速度はどんどん上昇。<br><strong>通行人に接触・車に衝突で即アウト。</strong><br>事故映像を残してゲームオーバー。60秒の完走を目指せ。</p><div class="instructions"><span><kbd>↑ W</kbd> アクセル</span><span><kbd>← → A D</kbd> ハンドル</span><span><kbd>↓ S</kbd> ブレーキ</span><span><kbd>SPACE</kbd> クラクション</span></div><p class="minor">60秒のサバイバルドライブ · スマホは画面ボタンで操作<br>登場人物は架空の成人。流血のない人形コメディです。</p><details class="voice-preview"><summary>音声14種を試聴</summary><div class="voice-buttons"><button data-voice="yarimasune">やりますねぇ</button><button data-voice="ikisugi">イキスギィ！</button><button data-voice="fa">ファッ!?</button><button data-voice="matei">おい待てい</button><button data-voice="arigatonasu">ありがとナス</button><button data-voice="aitenjan">開いてんじゃん</button><button data-voice="iissune">いいっすねぇ</button><button data-voice="koiyo">いいよ来いよ</button><button data-voice="soudayo">そうだよ</button><button data-voice="atarimae">当たり前だよなぁ</button><button data-voice="mazui">まずいですよ</button><button data-voice="hakkiri">はっきりわかんだね</button><button data-voice="tsukareta">疲れたもぉ〜ん</button><button data-voice="iizokore">いいゾ〜これ</button></div><p id="voicePreviewStatus" role="status">選んだ音声をそのまま再生します。</p></details><button id="start" class="primary" disabled>物理エンジンを準備中…</button><p id="best" class="minor"></p><div id="error" role="alert"></div></section>
-  <section id="pausePanel" class="panel small" hidden><div class="eyebrow">RECORDING PAUSED</div><h2>ひと休み。</h2><p>運転を再開しますか？</p><button id="resume" class="primary">運転を再開</button><button id="restartPause" class="secondary">最初から / R</button></section>
-  <section id="result" class="panel small" hidden><div id="resultHeading" class="eyebrow">RECORDING SAVED</div><h2 id="verdict">おつかれナス！</h2><div class="resultscore"><span>SURVIVAL SCORE</span><b id="resultScore">0</b></div><p id="resultStats"></p><p id="resultBest" class="minor"></p><button id="again" class="primary">もう一度挑戦</button><a class="back" href="../">ゲーム一覧へ</a></section>
+  <nav id="tools" aria-label="走行中の操作"><button id="pause" aria-label="一時停止">一時停止</button><button id="sound">音 ON</button></nav>
+  <section id="panel" class="start-screen" aria-label="開始画面">
+    <div class="standby"><span></span> 録画待機</div>
+    <a class="back-home" href="../">BLOCKYCLAW</a>
+    <div class="title-block">
+      <h1>イキスギ<br><span>ドラレコ</span></h1>
+      <p class="objective">60秒、ぶつからずに走り切れ。</p>
+      <div class="start-actions"><button id="start" class="primary" disabled>読み込み中…</button><button id="optionsOpen" class="text-button">操作・音声</button></div>
+      <p id="best" class="best"></p><div id="error" role="alert"></div>
+    </div>
+    <div class="start-rule">人・車・ガードレールへの接触で終了</div>
+  </section>
+  <dialog id="optionsDialog" class="options-dialog" aria-labelledby="optionsTitle">
+    <div class="dialog-heading"><h2 id="optionsTitle">操作・音声</h2><button id="optionsClose" class="close-button" aria-label="設定を閉じる">閉じる</button></div>
+    <div class="control-list"><p><span>アクセル</span><kbd>↑ / W</kbd></p><p><span>ハンドル</span><kbd>← → / A D</kbd></p><p><span>ブレーキ</span><kbd>↓ / S</kbd></p><p><span>クラクション</span><kbd>SPACE</kbd></p><p><span>一時停止</span><kbd>P / ESC</kbd></p></div>
+    <p class="touch-note">スマホは画面下のハンドルとペダルで操作。</p>
+    <div class="audio-setting"><span>ゲーム音声</span><button id="menuSound" class="setting-switch" aria-pressed="true">ON</button></div>
+    <details class="voice-preview"><summary>セリフを試聴（14種類）</summary><div class="voice-buttons"><button data-voice="yarimasune">やりますねぇ</button><button data-voice="ikisugi">イキスギィ！</button><button data-voice="fa">ファッ!?</button><button data-voice="matei">おい待てい</button><button data-voice="arigatonasu">ありがとナス</button><button data-voice="aitenjan">開いてんじゃん</button><button data-voice="iissune">いいっすねぇ</button><button data-voice="koiyo">いいよ来いよ</button><button data-voice="soudayo">そうだよ</button><button data-voice="atarimae">当たり前だよなぁ</button><button data-voice="mazui">まずいですよ</button><button data-voice="hakkiri">はっきりわかんだね</button><button data-voice="tsukareta">疲れたもぉ〜ん</button><button data-voice="iizokore">いいゾ〜これ</button></div><p id="voicePreviewStatus" role="status">音声を選ぶと再生します。</p></details>
+    <a class="credits" href="audio/SOURCES.md" target="_blank" rel="noopener">音声の出典</a>
+    <a class="credits" href="assets/characters/PROVENANCE.md" target="_blank" rel="noopener">人物の出典</a>
+  </dialog>
+  <section id="pausePanel" class="result-panel" hidden><p class="overline">一時停止</p><h2>続ける？</h2><button id="resume" class="primary">運転を再開</button><button id="restartPause" class="text-button">最初から</button></section>
+  <section id="result" class="result-panel" hidden><p id="resultHeading" class="overline">録画終了</p><h2 id="verdict">GAME OVER</h2><div class="resultscore"><span>走行スコア</span><b id="resultScore">0</b></div><p id="resultStats"></p><p id="resultBest" class="best"></p><button id="again" class="primary">もう一度挑戦</button><a class="text-button" href="../">ゲーム一覧</a></section>
 </main>
-<script type="module" src="game.js?v=20261121c"></script>
+<script type="module" src="ui.js?v=20261122a"></script>
+<script type="module" src="game.js?v=20261122a"></script>
 </body>
 </html>

@@ -1,0 +1,59 @@
+{
+  "name": "adult-male-swimmer",
+  "version": "1.0.0",
+  "assetLicense": "CC0-1.0",
+  "loaderLicense": "MIT",
+  "method": "CC0 human mesh and skin, Blender pose/decimation, independently modeled closed opaque swim shorts",
+  "paidGeneration": false,
+  "adult": true,
+  "swimwear": true,
+  "geometry": {
+    "loaded": true,
+    "style": "cc0-makehuman-textured",
+    "adult": true,
+    "swimwear": true,
+    "parts": 11,
+    "triangles": 25102,
+    "materials": 5,
+    "height": 1.786
+  },
+  "files": [
+    {
+      "path": "adult-swimmer.glb",
+      "bytes": 2700776,
+      "sha256": "cf49904dd1bbb4e7bdb43a086d5397a97c1d57f9ce49ace5e64228a54b67cae4"
+    },
+    {
+      "path": "adult-swimmer.json",
+      "bytes": 4851,
+      "sha256": "83f48a64df3dc2a4b5b0d560d2bcc559244aa1b47820ddcf47aad449abdcb2ed"
+    },
+    {
+      "path": "GLTFLoader.js",
+      "bytes": 115027,
+      "sha256": "9edd8c2ea9dffbe6a5e757a88ec41766b62ef6593c06dfefb309a80b9cd66c2c"
+    }
+  ],
+  "sourceFiles": [
+    {
+      "name": "base-male.glb",
+      "sha256": "86c7cdfa989924b45e2e5110c131a4a4e6251ceb4e71246be68e468f3a32ca86"
+    },
+    {
+      "name": "skins02_cc0.zip",
+      "sha256": "1613f1ef3afca53094511d26620ed7cf1d2dedc29ed3d384d60bdebe250698ae"
+    },
+    {
+      "name": "male-skin-1024.jpg",
+      "sha256": "853255ec6fb99e8c99eb3d0e99cba331f7d4229d7febc1ed40612e46a5bfe91f"
+    }
+  ],
+  "validation": {
+    "runtimeGeometryLoad": "PASS",
+    "variants": 3,
+    "partsPerRagdoll": 11,
+    "jointsPerRagdoll": 10,
+    "clothedBlenderPreview": "tools/dashcam-qa/character-preview.png",
+    "texturePreview": "real pixels rendered in Blender; Node test uses ImageBitmap stub"
+  }
+}
