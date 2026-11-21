@@ -79,6 +79,8 @@
   @keyframes tremble{25%{transform:translate(1px,-1px)}75%{transform:translate(-1px,1px)}}
   /* 結果 */
   .rank{font-family:"Noto Serif JP",serif;font-weight:900;font-size:clamp(40px,12vw,68px);color:var(--red);border:6px solid var(--red);padding:4px 20px;transform:rotate(-6deg);background:rgba(255,255,255,.8)}
+  .rank.stamp{animation:stamp .4s cubic-bezier(.2,1.6,.4,1)}
+  @keyframes stamp{0%{transform:rotate(-6deg) scale(2.4);opacity:0}100%{transform:rotate(-6deg) scale(1);opacity:1}}
   .rscore{font-size:20px;line-height:1.7}
   .rscore b{font-size:34px}
   .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
@@ -174,10 +176,11 @@ function mutate(t){
 
 function levelParams(level){
   return {
-    similars: Math.min(2 + level*2, 44),
-    total:    Math.min(25 + level*4, 90),
-    time:     Math.max(4.5, 9 - level*0.3),
-    absentRate: level >= 3 ? 0.2 : 0
+    similars: Math.min(3 + level*4, 60),
+    total:    Math.min(30 + level*6, 110),
+    time:     Math.max(3, 8.5 - level*0.45),
+    absentRate: level >= 2 ? 0.25 : 0,
+    shuffled: level >= 8
   };
 }
 
@@ -190,7 +193,7 @@ function makeBoard(level){
   let tries = 0;
   while (set.size < p.similars && tries++ < 2000) {
     let x = mutate(target);
-    if (level >= 6 && rnd(2) === 0) x = mutate(x); // 上級は二重変形も混ぜる
+    if (level >= 4 && rnd(2) === 0) x = mutate(x); // 上級は二重変形も混ぜる
     if (ok(x)) set.add(x);
   }
   tries = 0;
@@ -202,14 +205,15 @@ function makeBoard(level){
   const absent = Math.random() < p.absentRate;
   if (!absent) set.add(target);
   const numbers = [...set].sort((a,b)=>a-b);
-  return { target, numbers, absent, time: p.time, similars: p.similars };
+  if (p.shuffled) for (let i=numbers.length-1;i>0;i--){ const j=rnd(i+1); [numbers[i],numbers[j]]=[numbers[j],numbers[i]]; }
+  return { target, numbers, absent, time: p.time, similars: p.similars, shuffled: p.shuffled };
 }
 
 function rankFor(score, correct){
-  if (correct >= 20) return '首席合格';
-  if (correct >= 14) return '特待生合格';
-  if (correct >= 9)  return '現役合格';
-  if (correct >= 5)  return '補欠合格';
+  if (correct >= 15) return '首席合格';
+  if (correct >= 11) return '特待生合格';
+  if (correct >= 7)  return '現役合格';
+  if (correct >= 4)  return '補欠合格';
   if (correct >= 2)  return '一浪決定';
   return '二浪決定';
 }
@@ -354,7 +358,95 @@ if (typeof module !== 'undefined') module.exports = { mutate, makeBoard, levelPa
         tone(st,{type:'sawtooth',freq:base,to:base*.62,glide:.9,peak:.025,att:.08,hold:.35,rel:.5,lp:1100});
       }
     }
-    return { init, tick, heart, riserStart, riserStop, cheer, boo,
+    // ===== 太鼓・ミーム系（すべて合成） =====
+    function don(t,v=1){ // 太鼓の面「ドン」
+      tone(t,{type:'sine',freq:170,to:62,glide:.16,peak:.9*v,att:.002,rel:.22});
+      noise(t,{type:'lowpass',freq:420,q:.7,peak:.5*v,att:.001,rel:.09});
+    }
+    function ka(t,v=1){ // 太鼓のふち「カッ」
+      noise(t,{type:'bandpass',freq:2600,q:2.2,peak:.55*v,att:.001,rel:.045});
+      tone(t,{type:'triangle',freq:1150,peak:.22*v,att:.001,rel:.05});
+    }
+    function horn(t,len=.18){ // エアホーン
+      const d=ac.createWaveShaper(), c=new Float32Array(256);
+      for(let i=0;i<256;i++){ const x=i/128-1; c[i]=Math.tanh(x*4); } d.curve=c;
+      const g=ac.createGain(); const end=env(g,t,.22,.008,len,.06);
+      const f=ac.createBiquadFilter(); f.type='lowpass'; f.frequency.value=3200;
+      [466,469,932,1398].forEach((fr,i)=>{ const o=ac.createOscillator(); o.type='sawtooth'; o.frequency.value=fr;
+        const og=ac.createGain(); og.gain.value=[1,.8,.5,.25][i]; o.connect(og); og.connect(d); o.start(t); o.stop(end+.02); });
+      d.connect(f); f.connect(g); g.connect(master);
+    }
+    function boom(t){ // ドゥーン（重低音のオチ）
+      const d=ac.createWaveShaper(), c=new Float32Array(256);
+      for(let i=0;i<256;i++){ const x=i/128-1; c[i]=Math.tanh(x*6); } d.curve=c;
+      const o=ac.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(70,t); o.frequency.exponentialRampToValueAtTime(32,t+1.1);
+      const g=ac.createGain(); const end=env(g,t,.8,.004,.15,1.1);
+      o.connect(d); d.connect(g); g.connect(master); o.start(t); o.stop(end+.02);
+      noise(t,{type:'lowpass',freq:900,q:.5,peak:.35,att:.002,rel:.35});
+    }
+    function trombone(t){ // ワ・ワ・ワ・ワ〜ン
+      const notes=[[196,.28],[185,.28],[174.6,.28],[164.8,.95]];
+      let tt=t;
+      notes.forEach(([f,len],i)=>{
+        const o=ac.createOscillator(); o.type='sawtooth'; o.frequency.setValueAtTime(f,tt);
+        if(i===3){ const l=ac.createOscillator(), lg=ac.createGain(); l.frequency.value=6; lg.gain.value=5; l.connect(lg); lg.connect(o.frequency); l.start(tt); l.stop(tt+len+.1); }
+        const fl=ac.createBiquadFilter(); fl.type='lowpass'; fl.frequency.setValueAtTime(400,tt); fl.frequency.linearRampToValueAtTime(1300,tt+.08); fl.frequency.linearRampToValueAtTime(500,tt+len);
+        const g=ac.createGain(); env(g,tt,.22,.03,len-.08,.08);
+        o.connect(fl); fl.connect(g); g.connect(master); o.start(tt); o.stop(tt+len+.12); tt+=len;
+      });
+    }
+    function scratch(t){ // レコードを止めるキュッ
+      const s=ac.createBufferSource(); s.buffer=nbuf;
+      const f=ac.createBiquadFilter(); f.type='bandpass'; f.Q.value=4;
+      f.frequency.setValueAtTime(3500,t); f.frequency.exponentialRampToValueAtTime(400,t+.12); f.frequency.exponentialRampToValueAtTime(2800,t+.22);
+      const g=ac.createGain(); const end=env(g,t,.5,.005,.18,.05);
+      s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(end+.02);
+      tone(t,{type:'sawtooth',freq:900,to:120,glide:.2,peak:.08,rel:.05,lp:2000});
+    }
+    function say(text,{pitch=1.2,rate=1.35}={}){ // 合いの手（端末の読み上げ音声）
+      if(muted) return;
+      try{ const u=new SpeechSynthesisUtterance(text); u.lang='ja-JP'; u.pitch=pitch; u.rate=rate; u.volume=1;
+        speechSynthesis.cancel(); speechSynthesis.speak(u); }catch(e){}
+    }
+    const PRAISE=['ナイス！','うまい！','天才か','はやっ','神','えぐい','見えてる','強すぎ'];
+    // 正解：コンボ数だけ太鼓が連打され、節目でミーム音が積み上がる
+    function hit(combo){
+      if(!on()) return; const t=ac.currentTime;
+      const n=Math.min(combo,14), gap=Math.max(.055,.11-combo*.004);
+      for(let i=0;i<n;i++){ (i%4===3 ? ka : don)(t+i*gap, i===n-1?1.1:.85); }
+      let at=t+n*gap;
+      if(combo>=2) ka(at), don(at+.06,1.2);
+      if(combo>=3) say(PRAISE[Math.min(PRAISE.length-1, Math.floor(Math.random()*Math.min(PRAISE.length, combo)))]);
+      if(combo>=5){ horn(at+.12,.12); }
+      if(combo>=7){ horn(at+.3,.12); horn(at+.48,.3); }
+      if(combo>=9){ boom(at+.85); }
+      if(combo>=4) cheer(combo>=8?3:combo>=6?2:1);
+    }
+    // ミス：毎回ちがうオチ
+    function miss(kind){
+      if(!on()) return; const t=ac.currentTime; const r=Math.floor(Math.random()*3);
+      if(r===0){ scratch(t); boom(t+.22); }
+      else if(r===1){ trombone(t); }
+      else { ka(t); ka(t+.12); boom(t+.25); }
+      const lines = kind==='time' ? ['時間切れ〜','おそいおそい','寝てた？']
+                  : kind==='absent' ? ['あったのに','見落とし〜','そこにおるやん']
+                  : ['それ他人','ちゃうちゃう','誰の番号？'];
+      say(lines[Math.floor(Math.random()*lines.length)],{pitch:.8,rate:1.2});
+    }
+    // ランキング発表：ドロロロ…→結果
+    function rollThen(tier, label, cb){
+      if(!on()){ cb(); return; } const t=ac.currentTime, len=1.3;
+      for(let i=0, tt=0; tt<len; i++){ don(t+tt, .45+tt/len*.5); tt+=Math.max(.045,.09-tt*.04); }
+      setTimeout(()=>{
+        const s=ac.currentTime; don(s,1.3); ka(s+.02,1);
+        if(tier>=2){ horn(s+.05,.14); horn(s+.25,.14); horn(s+.45,.35); cheer(3); }
+        else if(tier===1){ cheer(1); }
+        else { trombone(s+.1); }
+        say(label,{pitch:tier>=1?1.1:.75,rate:1.1});
+        cb();
+      }, len*1000);
+    }
+    return { init, tick, heart, riserStart, riserStop, cheer, boo, hit, miss, rollThen,
              toggle(){ muted=!muted; if(muted) riserStop(); return muted; } };
   })();
 
@@ -376,7 +468,7 @@ if (typeof module !== 'undefined') module.exports = { mutate, makeBoard, levelPa
     locked=false;
     board = makeBoard(level);
     $('myNum').textContent = board.target;
-    $('lvTxt').textContent = `${level+1}年目　似た番号 ${board.similars}件`;
+    $('lvTxt').textContent = `${level+1}年目　似た番号 ${board.similars}件` + (board.shuffled ? '　掲示板がバラバラ' : '');
     const g=$('grid'); g.innerHTML='';
     board.numbers.forEach(n=>{
       const b=document.createElement('button'); b.className='cell'; b.textContent=n; b.dataset.n=n;
@@ -418,17 +510,17 @@ if (typeof module !== 'undefined') module.exports = { mutate, makeBoard, levelPa
     const gain = 100 + Math.round(left*200) + level*20;
     score+=gain; correct++; level++; streak++;
     A.riserStop(); document.body.classList.remove('hurry');
-    A.cheer(1 + (left > .55 ? 1 : 0) + (streak >= 3 ? 1 : 0));
+    A.hit(streak);
     $('score').textContent=score;
     if (el) el.classList.add('hit');
-    flash(board.absent ? '正解' : '合格', true, board.absent ? `本当になかった +${gain}` : `+${gain}`);
+    flash(board.absent ? '正解' : '合格', true, (streak>=2 ? `${streak}コンボ　` : '') + (board.absent ? `本当になかった +${gain}` : `+${gain}`));
     setTimeout(next, 950);
   }
 
   function wrong(why){
     locked=true; cancelAnimationFrame(raf);
     lives--; hearts(); streak=0;
-    A.riserStop(); A.boo(); document.body.classList.remove('hurry');
+    A.riserStop(); A.miss(why==='時間切れ' ? 'time' : board.absent ? 'wrong' : why==='あったのに…' ? 'absent' : 'wrong'); document.body.classList.remove('hurry');
     if (!board.absent){
       const c=document.querySelector(`.cell[data-n="${board.target}"]`);
       if (c){ c.classList.add('reveal'); c.scrollIntoView({block:'center',behavior:'smooth'}); }
@@ -439,7 +531,10 @@ if (typeof module !== 'undefined') module.exports = { mutate, makeBoard, levelPa
 
   function end(){
     const best = Math.max(store.get(), score); store.set(best);
-    $('rank').textContent = rankFor(score, correct);
+    const rk = rankFor(score, correct);
+    const tier = correct >= 11 ? 2 : correct >= 4 ? 1 : 0;
+    $('rank').textContent = '？？？'; $('rank').classList.remove('stamp');
+    setTimeout(()=>A.rollThen(tier, rk, ()=>{ $('rank').textContent = rk; $('rank').classList.add('stamp'); }), 250);
     $('rScore').textContent = score;
     $('rCorrect').textContent = correct;
     $('rLevel').textContent = level+1;
@@ -456,11 +551,11 @@ if (typeof module !== 'undefined') module.exports = { mutate, makeBoard, levelPa
   $('startBtn').addEventListener('click', start);
   $('againBtn').addEventListener('click', start);
   $('shareBtn').addEventListener('click',()=>{
-    const q=new URLSearchParams({text:`合格発表 早押しで「${$('rank').textContent}」\nスコア ${score}／正解 ${correct}問`, url:'https://kokoaru-ltd.github.io/blockyclaw-site/goukaku/'});
+    const q=new URLSearchParams({text:`合格発表 早押しで「${rankFor(score,correct)}」\nスコア ${score}／正解 ${correct}問`, url:'https://kokoaru-ltd.github.io/blockyclaw-site/goukaku/'});
     window.open('https://twitter.com/intent/tweet?'+q.toString(),'_blank','noopener');
   });
   $('copyBtn').addEventListener('click', async ()=>{
-    const txt = `合格発表 早押しで「${$('rank').textContent}」\nスコア ${score}／正解 ${correct}問\nhttps://kokoaru-ltd.github.io/blockyclaw-site/goukaku/`;
+    const txt = `合格発表 早押しで「${rankFor(score,correct)}」\nスコア ${score}／正解 ${correct}問\nhttps://kokoaru-ltd.github.io/blockyclaw-site/goukaku/`;
     try{ await navigator.clipboard.writeText(txt); $('copied').textContent='コピーしました'; }
     catch(e){ $('copied').textContent=txt; }
   });
