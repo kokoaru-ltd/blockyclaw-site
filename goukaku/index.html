@@ -142,7 +142,7 @@
   <div class="best" id="rBest"></div>
   <div class="row">
     <button class="btn" id="againBtn">もう一度受験</button>
-    <button class="btn sub" id="shareBtn">Xでシェア</button>
+    <button class="btn sub" id="shareBtn">Xで引用ポスト</button>
     <button class="btn sub" id="copyBtn">結果をコピー</button>
   </div>
   <div class="copied" id="copied"></div>
@@ -551,11 +551,15 @@ if (typeof module !== 'undefined') module.exports = { mutate, makeBoard, levelPa
   $('startBtn').addEventListener('click', start);
   $('againBtn').addEventListener('click', start);
   $('shareBtn').addEventListener('click',()=>{
-    const q=new URLSearchParams({text:`合格発表 早押しで「${rankFor(score,correct)}」\nスコア ${score}／正解 ${correct}問`, url:'https://kokoaru-ltd.github.io/blockyclaw-site/goukaku/'});
+    const q=new URLSearchParams({
+      text:`合格発表 早押しで「${rankFor(score,correct)}」\nスコア ${score}／正解 ${correct}問\nhttps://kokoaru-ltd.github.io/blockyclaw-site/goukaku/`,
+      hashtags:'合格発表早押し',
+      url:'https://x.com/kondo_ceollc/status/2124052542506365007'  // 最後のURLが引用ポストになる
+    });
     window.open('https://twitter.com/intent/tweet?'+q.toString(),'_blank','noopener');
   });
   $('copyBtn').addEventListener('click', async ()=>{
-    const txt = `合格発表 早押しで「${rankFor(score,correct)}」\nスコア ${score}／正解 ${correct}問\nhttps://kokoaru-ltd.github.io/blockyclaw-site/goukaku/`;
+    const txt = `合格発表 早押しで「${rankFor(score,correct)}」\nスコア ${score}／正解 ${correct}問\nhttps://kokoaru-ltd.github.io/blockyclaw-site/goukaku/\n#合格発表早押し\nhttps://x.com/kondo_ceollc/status/2124052542506365007`;
     try{ await navigator.clipboard.writeText(txt); $('copied').textContent='コピーしました'; }
     catch(e){ $('copied').textContent=txt; }
   });
