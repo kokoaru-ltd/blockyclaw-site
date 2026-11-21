@@ -1,6 +1,6 @@
 {
   "name": "adult-male-swimmer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "assetLicense": "CC0-1.0",
   "loaderLicense": "MIT",
   "method": "CC0 human mesh and skin, Blender pose/decimation, independently modeled closed opaque swim shorts",
@@ -25,13 +25,13 @@
     },
     {
       "path": "adult-swimmer.json",
-      "bytes": 4851,
-      "sha256": "83f48a64df3dc2a4b5b0d560d2bcc559244aa1b47820ddcf47aad449abdcb2ed"
+      "bytes": 4610,
+      "sha256": "91810d0cad426e968aa8e23d3aeee5a18279aaf5a00bd2a4e34876c18fa5c1fb"
     },
     {
       "path": "GLTFLoader.js",
-      "bytes": 115027,
-      "sha256": "9edd8c2ea9dffbe6a5e757a88ec41766b62ef6593c06dfefb309a80b9cd66c2c"
+      "bytes": 110300,
+      "sha256": "5b42ba378da21d67aa40758f6ab27662a2d24414a10a850687ce6f450089de30"
     }
   ],
   "sourceFiles": [
@@ -55,5 +55,6 @@
     "jointsPerRagdoll": 10,
     "clothedBlenderPreview": "tools/dashcam-qa/character-preview.png",
     "texturePreview": "real pixels rendered in Blender; Node test uses ImageBitmap stub"
-  }
+  },
+  "textEncoding": "UTF-8, LF line endings"
 }
