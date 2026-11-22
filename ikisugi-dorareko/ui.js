@@ -12,3 +12,14 @@ window.addEventListener('keydown',event=>{if(event.code!=='Enter'||event.repeat|
 const syncReady=()=>{open.disabled=byId('start').disabled;};
 new MutationObserver(syncReady).observe(byId('start'),{attributes:true,attributeFilter:['disabled']});
 syncReady();
+const result=byId('result'),shareScore=byId('shareScore');
+const updateScoreShare=()=>{
+  if(result.hidden)return;
+  const score=byId('resultScore').textContent.trim()||'0';
+  const intent=new URL('https://twitter.com/intent/tweet');
+  intent.searchParams.set('text',`イキスギドラレコ\n走行スコア：${score}\n#イキスギドラレコ`);
+  intent.searchParams.set('url','https://kokoaru-ltd.github.io/blockyclaw-site/ikisugi-dorareko/');
+  shareScore.href=intent.href;
+};
+new MutationObserver(updateScoreShare).observe(result,{attributes:true,attributeFilter:['hidden']});
+updateScoreShare();

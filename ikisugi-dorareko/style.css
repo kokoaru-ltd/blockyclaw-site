@@ -3,3 +3,4 @@
 .dialog-heading{position:sticky;top:0;background:#141c24;z-index:1;padding-bottom:12px}
 .credits+.credits{margin-left:18px}
 .text-button:disabled{opacity:.4;cursor:wait}
+.share-button{display:block;width:100%;margin-top:12px;padding:14px 16px;border:1px solid #8896a2;color:var(--white);background:transparent;font-size:16px;font-weight:700;text-decoration:none}.share-button:hover{background:#ffffff12}.share-button:active{background:#ffffff20}
