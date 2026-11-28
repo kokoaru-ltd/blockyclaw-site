@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SPELL ARENA</title>
+  <script type="module" crossorigin src="./assets/index-Bh7rcD4Y.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-nemnBJm4.css">
+</head>
+<body class="mode-home">
+  <div id="app"></div>
+  <div id="aim-dot" class="hidden"></div>
+  <div id="dmg-layer"></div>
+
+  <!-- =========================================================
+       CINEMATIC HOME LOBBY (small-magic inspired frameless menu)
+       ========================================================= -->
+  <section id="lobby">
+    <div class="lobby-shade"></div>
+    <div class="lobby-motes" id="lobby-motes"></div>
+
+    <div class="lobby-col">
+      <div class="lobby-kicker">THREE.JS SHADER VFX COLOSSEUM</div>
+      <h1 class="lobby-title">SPELL ARENA</h1>
+      <div class="lobby-under">Draw across reality or speak an incantation. Carry three forged spells into the duel.</div>
+      <div class="lobby-page" id="lobby-page-title"></div>
+      <div class="lobby-body" id="lobby-body"></div>
+    </div>
+
+    <div class="lobby-foot" id="lobby-foot">Arrows move &middot; Enter chooses &middot; Esc goes back</div>
+  </section>
+
+  <!-- =========================================================
+       FULL-SCREEN 3D SPELL FORGE HUD (Entire 3D screen is canvas!)
+       ========================================================= -->
+  <section id="forge-hud" class="hidden">
+    <div class="forge-top-bar">
+      <div class="forge-title-block">
+        <span class="forge-kicker">3D SPELL FORGE</span>
+        <span class="forge-sub">Drag anywhere across the 3D colosseum to draw &amp; fire live &middot; or type below</span>
+      </div>
+      <div class="forge-top-actions">
+        <button id="forge-reset-pillars" class="top-cmd" type="button">Reset Pillars</button>
+        <button id="forge-back-home" class="top-cmd" type="button">Home</button>
+        <button id="forge-start-duel" class="top-cmd primary" type="button">Enter Duel</button>
+      </div>
+    </div>
+
+    <!-- Bottom floating whisper bar (leaves >82% of viewport pure 3D drawing space) -->
+    <div class="forge-dock">
+      <div class="forge-dock-left">
+        <div class="forge-input-row">
+          <input id="forge-text" type="text" autocomplete="off" spellcheck="false" placeholder="Type any spell (e.g. Zero gravity lift and slam, crimson cleave, glacial beam)..." />
+          <button id="forge-test-btn" type="button">CAST LIVE</button>
+        </div>
+        <div class="forge-presets-row" id="forge-presets"></div>
+      </div>
+
+      <div class="forge-dock-right">
+        <div class="forge-live-spec" id="forge-live-spec"></div>
+        <div class="forge-bind-row">
+          <span class="bind-label">EQUIP TO DUEL:</span>
+          <button class="bind-slot-btn" data-slot="0" type="button">I <em class="bind-name"></em></button>
+          <button class="bind-slot-btn" data-slot="1" type="button">II <em class="bind-name"></em></button>
+          <button class="bind-slot-btn" data-slot="2" type="button">III <em class="bind-name"></em></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       IN-ARENA DUEL / SANDBOX HUD
+       ========================================================= -->
+  <header id="duel-hud">
+    <div class="life you">
+      <div class="life-meta">
+        <span class="life-name">Astral Mage</span>
+        <span class="life-hp" id="player-hp-num">100</span>
+      </div>
+      <div class="life-track">
+        <div class="life-lost" id="player-hp-lost"></div>
+        <div class="life-fill" id="player-hp-fill"></div>
+      </div>
+      <div class="life-sub">
+        <div class="ward-track"><div class="ward-fill" id="ward-fill"></div></div>
+        <div class="round-gems" id="player-gems"><i></i><i></i><i></i></div>
+      </div>
+    </div>
+
+    <div class="round-crest">
+      <span class="crest-score" id="score-text">0 &middot; 0</span>
+      <span class="crest-label" id="mode-crest-label">DUEL</span>
+    </div>
+
+    <div class="life foe">
+      <div class="life-meta">
+        <span class="life-hp" id="rival-hp-num">100</span>
+        <span class="life-name" id="rival-label">Crimson Warlock</span>
+      </div>
+      <div class="life-track">
+        <div class="life-lost" id="rival-hp-lost"></div>
+        <div class="life-fill" id="rival-hp-fill"></div>
+      </div>
+      <div class="life-sub">
+        <div class="round-gems" id="rival-gems"><i></i><i></i><i></i></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="corner-actions">
+    <button id="hud-forge-btn" type="button"><span>Tab</span> 3D Forge</button>
+    <button id="hud-home-btn" type="button"><span>Esc</span> Home</button>
+  </div>
+
+  <div id="cleave-hint" class="hidden"></div>
+
+  <!-- Circular Arcane Spell Medallions (3 in Duel, all 9 in Sandbox!) -->
+  <div id="spell-dock">
+    <div class="medallion-row" id="medallion-row"></div>
+    <div class="active-spell-name" id="active-spell-name"></div>
+  </div>
+
+  <div id="controls-whisper">
+    WASD Move &middot; Space Jump &middot; Shift Dash &middot; LMB Cast / Drag Cut &middot; RMB Ward &middot; 1&ndash;9 / Wheel Spell &middot; V View &middot; M Mute &middot; R Reset
+  </div>
+
+  <!-- Match Result Sheet -->
+  <div id="match-banner" class="sheet hidden">
+    <div class="sheet-inner">
+      <div class="sheet-rule"></div>
+      <h2 id="match-title">VICTORY</h2>
+      <p id="match-sub"></p>
+      <div class="sheet-actions">
+        <button id="rematch-btn" class="menu-cmd at" type="button">Rematch</button>
+        <button id="open-forge-end" class="menu-cmd" type="button">3D Spell Forge</button>
+        <button id="open-home-end" class="menu-cmd" type="button">Home</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
